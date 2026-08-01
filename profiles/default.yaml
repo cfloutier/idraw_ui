@@ -1,0 +1,11 @@
+name: default
+machine_model: idraw-2.0
+pen_up_height: 0.5
+pen_down_height: 5.0
+speed_penup: 8000.0
+speed_pendown: 2000.0
+accel: 75.0
+auto_rotate: true
+reordering: 0
+preview: false
+digest: 1
