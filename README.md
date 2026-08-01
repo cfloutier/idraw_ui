@@ -42,6 +42,23 @@ python scripts\test_tracer_connection.py
 The test script now talks to DrawCore directly through `pyserial` and does not use
 any import or path from the Inkscape extension folder.
 
+## Run the MVP UI
+
+Launch the current MVP UI from the project root:
+
+```powershell
+python -m idraw_ui.app
+```
+
+The window exposes the first operational machine controls:
+
+- Connect
+- Status
+- Home
+- Pen Up
+- Pen Down
+- Disconnect
+
 ## DrawCore dependency
 
 `drawcore_plotink` is installed from the public GitHub repository through
