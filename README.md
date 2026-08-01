@@ -17,6 +17,8 @@ This repository is intentionally started as a clean slate, with a clear separati
 ## Environment setup (conventional)
 
 This project uses a local virtualenv (`.venv`) and standard pip dependencies.
+The single dependency entrypoint is `requirements.txt`.
+`pyproject.toml` does not duplicate runtime dependencies to avoid drift.
 
 1. Create and activate local env:
 
@@ -28,7 +30,7 @@ python -m venv .venv
 2. Install local Python deps:
 
 ```powershell
-python -m pip install -r requirements-hw.txt
+python -m pip install -r requirements.txt
 ```
 
 3. Run first hardware test:
@@ -40,29 +42,9 @@ python scripts\test_tracer_connection.py
 The test script now talks to DrawCore directly through `pyserial` and does not use
 any import or path from the Inkscape extension folder.
 
-## Fork strategy for DrawCore modules
+## DrawCore dependency
 
-- `plotink` is already available on pip.
-- `drawcore_plotink` is not currently published on pip.
-
-If you want to use `drawcore_plotink` as a regular pip dependency, create a dedicated
-repository (fork/vendor mirror), add packaging metadata, and install it with:
-
-```powershell
-python -m pip install "drawcore_plotink @ git+https://github.com/cfloutier/drawcore_plotink.git@main"
-```
-
-Or use the ready-made requirements file:
-
-```powershell
-python -m pip install -r requirements-hw-drawcore.txt
-```
-
-This removes any runtime dependency on `AppData/Roaming/inkscape/extensions`.
-
-See templates:
-
-- `requirements-hw.txt`
-- `requirements-hw-drawcore.txt`
-- `requirements-hw-drawcore.example.txt`
+`drawcore_plotink` is installed from the public GitHub repository through
+`requirements.txt`, which removes any runtime dependency on
+`AppData/Roaming/inkscape/extensions`.
 

@@ -1,7 +1,0 @@
-# Example of installing DrawCore helper package from your own fork.
-# Replace <your-org> with your GitHub org/user.
-
--r requirements-hw.txt
-
-# Not published on PyPI at the moment:
-drawcore_plotink @ git+https://github.com/cfloutier/drawcore_plotink.git@main
