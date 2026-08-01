@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import tkinter as tk
-from tkinter import ttk
+
+import customtkinter as ctk
 
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 
@@ -13,13 +14,17 @@ class AppWindow:
     def __init__(self, driver: Driver) -> None:
         self.driver = driver
         self.title = "idraw_ui"
-        self.root = tk.Tk()
+        ctk.set_appearance_mode("system")
+        ctk.set_default_color_theme("blue")
+
+        self.root = ctk.CTk()
         self.root.title(self.title)
         self.root.geometry("560x280")
         self.root.minsize(460, 240)
 
         self.status_var = tk.StringVar(value="Ready")
         self.state_var = tk.StringVar(value="State: idle")
+        self.status_label: ctk.CTkLabel | None = None
 
         self._build_layout()
 
@@ -28,58 +33,82 @@ class AppWindow:
         return cls(Driver.from_profile_file(path))
 
     def _build_layout(self) -> None:
-        frame = ttk.Frame(self.root, padding=14)
-        frame.pack(fill=tk.BOTH, expand=True)
+        frame = ctk.CTkFrame(self.root, corner_radius=12)
+        frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        frame.columnconfigure(0, weight=1)
 
-        ttk.Label(
+        ctk.CTkLabel(
             frame,
             text="iDraw MVP Control",
-            font=("Segoe UI", 14, "bold"),
-        ).pack(anchor="w")
+            font=ctk.CTkFont(size=20, weight="bold"),
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 4))
 
-        ttk.Label(frame, textvariable=self.state_var).pack(anchor="w", pady=(10, 0))
+        ctk.CTkLabel(
+            frame,
+            textvariable=self.state_var,
+            font=ctk.CTkFont(size=13),
+        ).grid(row=1, column=0, sticky="w", padx=16, pady=(0, 6))
 
-        status_box = ttk.Label(
+        self.status_label = ctk.CTkLabel(
             frame,
             textvariable=self.status_var,
-            relief=tk.GROOVE,
             anchor="w",
-            padding=8,
+            corner_radius=8,
+            fg_color=("#E8ECF2", "#2A2D35"),
+            justify="left",
+            height=38,
         )
-        status_box.pack(fill=tk.X, pady=(6, 12))
+        self.status_label.grid(row=2, column=0, sticky="ew", padx=16, pady=(0, 12))
 
-        controls = ttk.Frame(frame)
-        controls.pack(fill=tk.X)
+        controls = ctk.CTkFrame(frame, fg_color="transparent")
+        controls.grid(row=3, column=0, sticky="ew", padx=16, pady=(0, 14))
 
-        ttk.Button(controls, text="Connect", command=self.on_connect).grid(
-            row=0, column=0, padx=4, pady=4, sticky="ew"
+        ctk.CTkButton(controls, text="Connect", command=self.on_connect).grid(
+            row=0, column=0, padx=6, pady=6, sticky="ew"
         )
-        ttk.Button(controls, text="Status", command=self.on_status).grid(
-            row=0, column=1, padx=4, pady=4, sticky="ew"
+        ctk.CTkButton(controls, text="Status", command=self.on_status).grid(
+            row=0, column=1, padx=6, pady=6, sticky="ew"
         )
-        ttk.Button(controls, text="Home", command=self.on_home).grid(
-            row=0, column=2, padx=4, pady=4, sticky="ew"
+        ctk.CTkButton(controls, text="Home", command=self.on_home).grid(
+            row=0, column=2, padx=6, pady=6, sticky="ew"
         )
-        ttk.Button(controls, text="Pen Up", command=self.on_pen_up).grid(
-            row=1, column=0, padx=4, pady=4, sticky="ew"
+        ctk.CTkButton(controls, text="Pen Up", command=self.on_pen_up).grid(
+            row=1, column=0, padx=6, pady=6, sticky="ew"
         )
-        ttk.Button(controls, text="Pen Down", command=self.on_pen_down).grid(
-            row=1, column=1, padx=4, pady=4, sticky="ew"
+        ctk.CTkButton(controls, text="Pen Down", command=self.on_pen_down).grid(
+            row=1, column=1, padx=6, pady=6, sticky="ew"
         )
-        ttk.Button(controls, text="Disconnect", command=self.on_disconnect).grid(
-            row=1, column=2, padx=4, pady=4, sticky="ew"
-        )
+        ctk.CTkButton(
+            controls,
+            text="Disconnect",
+            command=self.on_disconnect,
+            fg_color="#B23A48",
+            hover_color="#9A2F3D",
+        ).grid(row=1, column=2, padx=6, pady=6, sticky="ew")
 
         for idx in range(3):
             controls.columnconfigure(idx, weight=1)
+
+    def _status_colors(self, ok: bool) -> tuple[str, str]:
+        if ok:
+            return ("#E3F8E8", "#22422B")
+        return ("#FBE4E6", "#4A252B")
+
+    def _set_status_style(self, ok: bool) -> None:
+        if self.status_label is None:
+            return
+        light, dark = self._status_colors(ok)
+        self.status_label.configure(fg_color=(light, dark))
 
     def _update_from_result(self, result: DriverCommandResult) -> None:
         progress = self.driver.get_progress()
         self.state_var.set(f"State: {progress.state.value}")
         if result.ok:
             self.status_var.set(f"OK: {result.message}")
+            self._set_status_style(ok=True)
         else:
             self.status_var.set(f"ERROR: {result.message}")
+            self._set_status_style(ok=False)
 
     def on_connect(self) -> None:
         self._update_from_result(self.driver.connect())

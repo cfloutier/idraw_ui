@@ -1,0 +1,26 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "idraw_ui: App",
+      "type": "python",
+      "request": "launch",
+      "module": "idraw_ui.app",
+      "cwd": "${workspaceFolder}",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "console": "integratedTerminal",
+      "justMyCode": true
+    },
+    {
+      "name": "idraw_ui: Hardware Smoke Test",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/test_tracer_connection.py",
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "justMyCode": true
+    }
+  ]
+}

@@ -47,10 +47,12 @@ any import or path from the Inkscape extension folder.
 Launch the current MVP UI from the project root:
 
 ```powershell
+$env:PYTHONPATH="src"
 python -m idraw_ui.app
 ```
 
-The window exposes the first operational machine controls:
+The UI is now built with `customtkinter` for a cleaner visual style and exposes
+the first operational machine controls:
 
 - Connect
 - Status
