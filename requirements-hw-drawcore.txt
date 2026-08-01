@@ -1,0 +1,3 @@
+-r requirements-hw.txt
+
+drawcore_plotink @ git+https://github.com/cfloutier/drawcore_plotink.git@main

@@ -1,0 +1,4 @@
+# Hardware/runtime baseline for idraw_ui
+pyserial>=3.5
+lxml>=6.1.0
+plotink>=1.14.2
