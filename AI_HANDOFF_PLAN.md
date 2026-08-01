@@ -56,8 +56,9 @@ Validated behavior:
 - Status query (`?`)
 - Home command (`$H`)
 - Status query after home
+- Pen up / pen down movements
 
-Observed successful run on COM5 with expected status transitions and HOME acknowledged.
+Observed successful run on COM5 with expected status transitions, HOME acknowledged, and pen up/down commands validated.
 
 ## 5) Why no Inkscape path dependency remains
 
@@ -104,20 +105,21 @@ Planned path for that future:
 - scaffolding for package and folders
 - app entrypoint placeholder
 - backend data models
-- placeholder driver and vendor bridge
+- concrete backend bridge for connect/disconnect/status/home/pen up/down
+- driver wiring for real hardware actions
 - hardware smoke test script
 
 ### Still placeholders
 
-- `src/idraw_ui/backend/driver.py`: business actions are mostly state placeholders
-- `src/idraw_ui/backend/vendor_bridge.py`: no persistent real device session yet
-- `src/idraw_ui/ui/app_window.py`: UI is minimal placeholder
+- `src/idraw_ui/backend/driver.py`: some higher-level plotting workflow actions remain to be expanded
+- `src/idraw_ui/backend/vendor_bridge.py`: advanced motion/plotting capabilities can still be added later
+- `src/idraw_ui/ui/app_window.py`: UI remains minimal and can be extended once workflow needs grow
 
 ## 9) Next execution plan (phased)
 
 ### Phase A: real backend bridge
 
-Implement a concrete hardware bridge in backend:
+Completed: a concrete hardware bridge is now implemented in backend for:
 
 - connect/disconnect
 - read status
@@ -127,7 +129,7 @@ Implement a concrete hardware bridge in backend:
 
 ### Phase B: wire driver to real bridge
 
-Replace placeholder actions in `Driver` by actual bridge calls and update `PlotProgress` coherently.
+Completed: `Driver` is now wired to the real bridge for the core machine-control actions, with progress state updated coherently.
 
 ### Phase C: profile/config integration
 
@@ -135,7 +137,7 @@ Read profile values and apply relevant runtime parameters in a controlled way.
 
 ### Phase D: UI MVP
 
-Add a minimal operational UI panel:
+Completed: a minimal operational UI panel is now available with:
 
 - connect
 - status display
