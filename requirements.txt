@@ -1,5 +1,6 @@
 # idraw_ui runtime dependencies
 pyserial>=3.5
 lxml>=6.1.0
+PyYAML>=6.0
 
 drawcore_plotink @ git+https://github.com/cfloutier/drawcore_plotink.git@main

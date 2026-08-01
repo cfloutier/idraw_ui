@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 from idraw_ui.backend.models import MachineProfile, PlotProgress, PlotState
+from idraw_ui.backend.profiles import load_machine_profile
 from idraw_ui.backend.vendor_bridge import VendorBridge, VendorBridgeError
 
 
@@ -23,7 +25,38 @@ class Driver:
     ) -> None:
         self.profile = profile or MachineProfile()
         self.progress = PlotProgress()
-        self.bridge = bridge or VendorBridge()
+        if bridge is not None:
+            self.bridge = bridge
+        else:
+            self.bridge = VendorBridge(
+                port=self._profile_str("port"),
+                baudrate=self._profile_int("baudrate", 115200),
+                timeout=self._profile_float("serial_timeout", 1.0),
+                pen_up_command=self._profile_str("pen_up_command") or "M5",
+                pen_down_command=self._profile_str("pen_down_command") or "M3 S1000",
+            )
+
+    @classmethod
+    def from_profile_file(cls, path: str | Path) -> "Driver":
+        return cls(profile=load_machine_profile(path))
+
+    def _profile_str(self, key: str) -> str | None:
+        value = self.profile.field.get(key)
+        if value is None:
+            return None
+        return str(value)
+
+    def _profile_int(self, key: str, default: int) -> int:
+        value = self.profile.field.get(key)
+        if value is None:
+            return default
+        return int(value)
+
+    def _profile_float(self, key: str, default: float) -> float:
+        value = self.profile.field.get(key)
+        if value is None:
+            return default
+        return float(value)
 
     def connect(self) -> DriverCommandResult:
         try:

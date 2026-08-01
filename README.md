@@ -48,6 +48,29 @@ any import or path from the Inkscape extension folder.
 `requirements.txt`, which removes any runtime dependency on
 `AppData/Roaming/inkscape/extensions`.
 
+## Profile-driven backend config
+
+Backend runtime settings can be loaded from a YAML profile file (for example
+`profiles/default.yaml`) through `Driver.from_profile_file(...)`.
+
+Supported optional profile keys for serial behavior:
+
+- `port` (example: `COM5`)
+- `baudrate` (default: `115200`)
+- `serial_timeout` (default: `1.0`)
+- `pen_up_command` (default: `M5`)
+- `pen_down_command` (default: `M3 S1000`)
+
+Example:
+
+```python
+from idraw_ui.backend.driver import Driver
+
+driver = Driver.from_profile_file("profiles/default.yaml")
+result = driver.connect()
+print(result.ok, result.message)
+```
+
 ## Development tooling
 
 For local formatting and linting, install the development hook once in the

@@ -31,13 +31,26 @@ class VendorBridge:
         port: str | None = None,
         baudrate: int = 115200,
         timeout: float = 1.0,
+        pen_up_command: str = "M5",
+        pen_down_command: str = "M3 S1000",
     ) -> None:
         self.bundle_path = bundle_path
         self.port = port
         self.baudrate = baudrate
         self.timeout = timeout
+        self.pen_up_command = pen_up_command
+        self.pen_down_command = pen_down_command
         self.connected = False
         self._serial: Optional[serial.Serial] = None
+
+    @staticmethod
+    def _normalize_command(command: str) -> str:
+        command = command.strip()
+        if not command:
+            raise VendorBridgeError("Command cannot be empty")
+        if not command.endswith("\r"):
+            command = f"{command}\r"
+        return command
 
     def find_drawcore_ports(self) -> list[CandidatePort]:
         candidates: list[CandidatePort] = []
@@ -153,10 +166,12 @@ class VendorBridge:
         return self._run_command_expect_ok("$H\r")
 
     def raise_pen(self) -> str:
-        return self._run_command_expect_ok("M5\r")
+        return self._run_command_expect_ok(self._normalize_command(self.pen_up_command))
 
     def lower_pen(self) -> str:
-        return self._run_command_expect_ok("M3 S1000\r")
+        return self._run_command_expect_ok(
+            self._normalize_command(self.pen_down_command)
+        )
 
     def get_capabilities(self) -> dict[str, Any]:
         return {
@@ -165,4 +180,6 @@ class VendorBridge:
             "bundle_path": self.bundle_path,
             "port": self.port,
             "baudrate": self.baudrate,
+            "pen_up_command": self.pen_up_command,
+            "pen_down_command": self.pen_down_command,
         }

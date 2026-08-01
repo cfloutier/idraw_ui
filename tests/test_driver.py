@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pathlib
 import sys
+import tempfile
 import unittest
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -10,6 +11,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from idraw_ui.backend.driver import Driver  # noqa: E402
+from idraw_ui.backend.profiles import load_machine_profile  # noqa: E402
 from idraw_ui.backend.vendor_bridge import VendorBridgeError  # noqa: E402
 
 
@@ -66,6 +68,43 @@ class DriverTests(unittest.TestCase):
         driver.connect()
         self.assertTrue(driver.raise_pen().ok)
         self.assertTrue(driver.lower_pen().ok)
+
+    def test_driver_uses_profile_field_for_bridge_configuration(self) -> None:
+        profile_yaml = """
+name: dev
+machine_model: idraw-2.0
+port: COM9
+baudrate: 57600
+serial_timeout: 2.5
+pen_up_command: M300 S30
+pen_down_command: M300 S50
+"""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            profile_path = pathlib.Path(tmp_dir) / "profile.yaml"
+            profile_path.write_text(profile_yaml.strip() + "\n", encoding="utf-8")
+
+            driver = Driver.from_profile_file(profile_path)
+
+        self.assertEqual(driver.bridge.port, "COM9")
+        self.assertEqual(driver.bridge.baudrate, 57600)
+        self.assertEqual(driver.bridge.timeout, 2.5)
+        self.assertEqual(driver.bridge.pen_up_command, "M300 S30")
+        self.assertEqual(driver.bridge.pen_down_command, "M300 S50")
+
+    def test_profile_loader_keeps_extra_fields(self) -> None:
+        profile_yaml = """
+name: profile-extra
+machine_model: idraw-2.0
+custom_option: value
+"""
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            profile_path = pathlib.Path(tmp_dir) / "profile.yaml"
+            profile_path.write_text(profile_yaml.strip() + "\n", encoding="utf-8")
+            profile = load_machine_profile(profile_path)
+
+        self.assertEqual(profile.name, "profile-extra")
+        self.assertEqual(profile.machine_model, "idraw-2.0")
+        self.assertEqual(profile.field["custom_option"], "value")
 
 
 if __name__ == "__main__":
