@@ -27,13 +27,13 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 ```
 
-2. Install local Python deps:
+1. Install local Python deps:
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-3. Run first hardware test:
+1. Run first hardware test:
 
 ```powershell
 python scripts\test_tracer_connection.py
@@ -48,3 +48,14 @@ any import or path from the Inkscape extension folder.
 `requirements.txt`, which removes any runtime dependency on
 `AppData/Roaming/inkscape/extensions`.
 
+## Development tooling
+
+For local formatting and linting, install the development hook once in the
+project environment:
+
+```powershell
+python -m pip install pre-commit
+python -m pre_commit install
+```
+
+This uses Ruff to automatically format and lint Python files before each commit.
