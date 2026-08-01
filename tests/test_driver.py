@@ -30,6 +30,7 @@ class FakeBridge:
         return True
 
     def disconnect(self) -> None:
+        self._maybe_fail("disconnect")
         self.connected = False
 
     def get_status(self) -> str:
@@ -68,6 +69,16 @@ class DriverTests(unittest.TestCase):
         driver.connect()
         self.assertTrue(driver.raise_pen().ok)
         self.assertTrue(driver.lower_pen().ok)
+
+    def test_disconnect_failure_is_reported(self) -> None:
+        driver = Driver(bridge=FakeBridge(fail_on="disconnect"))
+        driver.connect()
+
+        result = driver.disconnect()
+
+        self.assertFalse(result.ok)
+        self.assertIn("failed disconnect", result.message)
+        self.assertEqual(driver.get_progress().state, "idle")
 
     def test_driver_uses_profile_field_for_bridge_configuration(self) -> None:
         profile_yaml = """

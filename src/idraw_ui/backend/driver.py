@@ -32,8 +32,23 @@ class Driver:
                 port=self._profile_str("port"),
                 baudrate=self._profile_int("baudrate", 115200),
                 timeout=self._profile_float("serial_timeout", 1.0),
-                pen_up_command=self._profile_str("pen_up_command") or "M5",
-                pen_down_command=self._profile_str("pen_down_command") or "M3 S1000",
+                pen_up_command=self._profile_str("pen_up_command"),
+                pen_down_command=self._profile_str("pen_down_command"),
+                pen_up_z=self._profile_float(
+                    "pen_up_height", self.profile.pen_up_height
+                ),
+                pen_down_z=self._profile_float(
+                    "pen_down_height", self.profile.pen_down_height
+                ),
+                pen_move_speed=self._profile_float(
+                    "pen_move_speed", self.profile.speed_penup
+                ),
+                speed_penup=self._profile_float(
+                    "speed_penup", self.profile.speed_penup
+                ),
+                speed_pendown=self._profile_float(
+                    "speed_pendown", self.profile.speed_pendown
+                ),
             )
 
     @classmethod
@@ -70,10 +85,15 @@ class Driver:
             return DriverCommandResult(ok=False, message=str(exc))
 
     def disconnect(self) -> DriverCommandResult:
-        self.bridge.disconnect()
-        self.progress.state = PlotState.IDLE
-        self.progress.message = "Disconnected"
-        return DriverCommandResult(ok=True, message="disconnected")
+        try:
+            self.bridge.disconnect()
+            self.progress.state = PlotState.IDLE
+            self.progress.message = "Disconnected"
+            return DriverCommandResult(ok=True, message="disconnected")
+        except VendorBridgeError as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Disconnect failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
 
     def status(self) -> DriverCommandResult:
         try:

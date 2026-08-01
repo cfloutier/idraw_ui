@@ -31,8 +31,13 @@ class VendorBridge:
         port: str | None = None,
         baudrate: int = 115200,
         timeout: float = 1.0,
-        pen_up_command: str = "M5",
-        pen_down_command: str = "M3 S1000",
+        pen_up_command: str | None = None,
+        pen_down_command: str | None = None,
+        pen_up_z: float = 0.5,
+        pen_down_z: float = 5.0,
+        pen_move_speed: float = 8000.0,
+        speed_penup: float = 8000.0,
+        speed_pendown: float = 2000.0,
     ) -> None:
         self.bundle_path = bundle_path
         self.port = port
@@ -40,6 +45,11 @@ class VendorBridge:
         self.timeout = timeout
         self.pen_up_command = pen_up_command
         self.pen_down_command = pen_down_command
+        self.pen_up_z = pen_up_z
+        self.pen_down_z = pen_down_z
+        self.pen_move_speed = pen_move_speed
+        self.speed_penup = speed_penup
+        self.speed_pendown = speed_pendown
         self.connected = False
         self._serial: Optional[serial.Serial] = None
 
@@ -165,13 +175,25 @@ class VendorBridge:
     def home(self) -> str:
         return self._run_command_expect_ok("$H\r")
 
+    def _move_pen(self, z_pos: float, feed_restore: float) -> str:
+        command = f"G1G90 Z{z_pos:.3f}F{self.pen_move_speed:.1f}\r"
+        response = self._run_command_expect_ok(command)
+        self._run_command_expect_ok(f"G1 F{feed_restore:.1f}\r")
+        return response
+
     def raise_pen(self) -> str:
-        return self._run_command_expect_ok(self._normalize_command(self.pen_up_command))
+        if self.pen_up_command:
+            return self._run_command_expect_ok(
+                self._normalize_command(self.pen_up_command)
+            )
+        return self._move_pen(self.pen_up_z, self.speed_penup)
 
     def lower_pen(self) -> str:
-        return self._run_command_expect_ok(
-            self._normalize_command(self.pen_down_command)
-        )
+        if self.pen_down_command:
+            return self._run_command_expect_ok(
+                self._normalize_command(self.pen_down_command)
+            )
+        return self._move_pen(self.pen_down_z, self.speed_pendown)
 
     def get_capabilities(self) -> dict[str, Any]:
         return {
@@ -182,4 +204,9 @@ class VendorBridge:
             "baudrate": self.baudrate,
             "pen_up_command": self.pen_up_command,
             "pen_down_command": self.pen_down_command,
+            "pen_up_z": self.pen_up_z,
+            "pen_down_z": self.pen_down_z,
+            "pen_move_speed": self.pen_move_speed,
+            "speed_penup": self.speed_penup,
+            "speed_pendown": self.speed_pendown,
         }
