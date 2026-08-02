@@ -1,4 +1,9 @@
 from idraw_ui.backend.driver import Driver
+from idraw_ui.backend.idraw2_facade import (
+    EngineCommandResult,
+    Idraw2Facade,
+    IdrawRuntime,
+)
 from idraw_ui.backend.models import (
     AppState,
     MachineSettings,
@@ -18,6 +23,9 @@ from idraw_ui.backend.vendor_bridge import VendorBridge
 
 __all__ = [
     "Driver",
+    "Idraw2Facade",
+    "IdrawRuntime",
+    "EngineCommandResult",
     "MachineSettings",
     "PlotProfile",
     "AppState",
