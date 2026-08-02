@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from idraw_ui.backend.idraw2_facade import Idraw2Facade
 from idraw_ui.backend.models import (
     MachineSettings,
     PlotProfile,
@@ -28,10 +30,15 @@ class Driver:
         machine_settings: Optional[MachineSettings] = None,
         plot_profile: Optional[PlotProfile] = None,
         bridge: VendorBridge | None = None,
+        plot_facade: Idraw2Facade | None = None,
     ) -> None:
         self.machine_settings = machine_settings or MachineSettings()
         self.plot_profile = plot_profile or PlotProfile()
         self.progress = PlotProgress()
+        self.plot_facade = plot_facade or Idraw2Facade(
+            machine_settings=self.machine_settings,
+            plot_profile=self.plot_profile,
+        )
         if bridge is not None:
             self.bridge = bridge
         else:
@@ -104,27 +111,60 @@ class Driver:
             return DriverCommandResult(ok=False, message=str(exc))
 
     def load_svg(self, path: str) -> DriverCommandResult:
-        return DriverCommandResult(ok=True, message=f"Loaded SVG: {path}")
+        result = self.plot_facade.load_svg(path)
+        self._sync_progress(self.plot_facade.get_progress())
+        return DriverCommandResult(ok=result.ok, message=result.message)
 
     def estimate(self) -> DriverCommandResult:
-        self.progress.state = PlotState.READY
-        self.progress.message = "Estimation placeholder"
-        return DriverCommandResult(ok=True, message="estimation placeholder")
+        result = self.plot_facade.prepare()
+        self._sync_progress(self.plot_facade.get_progress())
+        return DriverCommandResult(ok=result.ok, message=result.message)
 
     def start(self) -> DriverCommandResult:
-        self.progress.state = PlotState.DRAWING
-        self.progress.message = "Start placeholder"
-        return DriverCommandResult(ok=True, message="start placeholder")
+        result = self.plot_facade.start()
+        self._sync_progress(self.plot_facade.get_progress())
+        return DriverCommandResult(ok=result.ok, message=result.message)
 
     def pause(self) -> DriverCommandResult:
-        self.progress.state = PlotState.PAUSED
-        self.progress.message = "Pause placeholder"
-        return DriverCommandResult(ok=True, message="pause placeholder")
+        result = self.plot_facade.pause()
+        self._sync_progress(self.plot_facade.get_progress())
+        return DriverCommandResult(ok=result.ok, message=result.message)
 
     def resume(self) -> DriverCommandResult:
-        self.progress.state = PlotState.DRAWING
-        self.progress.message = "Resume placeholder"
-        return DriverCommandResult(ok=True, message="resume placeholder")
+        result = self.plot_facade.resume()
+        self._sync_progress(self.plot_facade.get_progress())
+        return DriverCommandResult(ok=result.ok, message=result.message)
+
+    def stop(self) -> DriverCommandResult:
+        result = self.plot_facade.stop()
+        self._sync_progress(self.plot_facade.get_progress())
+        return DriverCommandResult(ok=result.ok, message=result.message)
+
+    def update_plot_profile(self, **changes: object) -> None:
+        self.plot_profile = replace(self.plot_profile, **changes)
+        self.bridge.pen_up_command = self.plot_profile.pen_up_command
+        self.bridge.pen_down_command = self.plot_profile.pen_down_command
+        self.bridge.pen_up_z = self.plot_profile.pen_up_height
+        self.bridge.pen_down_z = self.plot_profile.pen_down_height
+        self.bridge.pen_move_speed = (
+            self.plot_profile.pen_move_speed or self.plot_profile.speed_penup
+        )
+        self.bridge.speed_penup = self.plot_profile.speed_penup
+        self.bridge.speed_pendown = self.plot_profile.speed_pendown
+        self.plot_facade.reconfigure(
+            machine_settings=self.machine_settings,
+            plot_profile=self.plot_profile,
+        )
+
+    def update_machine_settings(self, **changes: object) -> None:
+        self.machine_settings = replace(self.machine_settings, **changes)
+        self.bridge.port = self.machine_settings.port
+        self.bridge.baudrate = self.machine_settings.baudrate
+        self.bridge.timeout = self.machine_settings.serial_timeout
+        self.plot_facade.reconfigure(
+            machine_settings=self.machine_settings,
+            plot_profile=self.plot_profile,
+        )
 
     def home(self) -> DriverCommandResult:
         self.progress.state = PlotState.HOMING
@@ -168,5 +208,22 @@ class Driver:
             self.progress.message = f"Pen lower failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
+    def _sync_progress(self, source: PlotProgress) -> None:
+        self.progress.state = source.state
+        self.progress.elapsed_seconds = source.elapsed_seconds
+        self.progress.estimated_seconds = source.estimated_seconds
+        self.progress.distance_pen_down_mm = source.distance_pen_down_mm
+        self.progress.distance_total_mm = source.distance_total_mm
+        self.progress.pen_lifts = source.pen_lifts
+        self.progress.message = source.message
+
     def get_progress(self) -> PlotProgress:
+        plot_progress = self.plot_facade.get_progress()
+        if self.plot_facade.svg_path is not None or plot_progress.state in {
+            PlotState.DRAWING,
+            PlotState.PAUSING,
+            PlotState.PAUSED,
+            PlotState.STOPPING,
+        }:
+            self._sync_progress(plot_progress)
         return self.progress

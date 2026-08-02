@@ -70,6 +70,19 @@ class Idraw2Facade:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Runtime configure failed: {exc}"
 
+    def reconfigure(
+        self,
+        *,
+        machine_settings: MachineSettings | None = None,
+        plot_profile: PlotProfile | None = None,
+    ) -> None:
+        if machine_settings is not None:
+            self.machine_settings = machine_settings
+        if plot_profile is not None:
+            self.plot_profile = plot_profile
+
+        self.runtime.configure(self.machine_settings, self.plot_profile)
+
     def _fail(
         self, message: str, *, state: PlotState | None = None
     ) -> EngineCommandResult:

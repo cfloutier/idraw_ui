@@ -4,6 +4,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from types import SimpleNamespace
 import yaml
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -12,6 +13,7 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from idraw_ui.backend.driver import Driver  # noqa: E402
+from idraw_ui.backend.models import PlotProgress, PlotState  # noqa: E402
 from idraw_ui.backend.profiles import (  # noqa: E402
     load_app_state,
     load_machine_settings,
@@ -61,6 +63,58 @@ class FakeBridge:
     def lower_pen(self) -> str:
         self._maybe_fail("lower_pen")
         return "ok"
+
+
+class FakePlotFacade:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object | None]] = []
+        self.progress = PlotProgress(message="plot-idle")
+        self.svg_path: pathlib.Path | None = None
+        self.last_reconfigure: tuple[object, object] | None = None
+
+    def load_svg(self, path: str):
+        self.calls.append(("load_svg", path))
+        self.svg_path = pathlib.Path(path)
+        self.progress.state = PlotState.READY
+        self.progress.message = "Loaded SVG from facade"
+        return SimpleNamespace(ok=True, message="loaded")
+
+    def prepare(self):
+        self.calls.append(("prepare", None))
+        self.progress.state = PlotState.READY
+        self.progress.estimated_seconds = 12.0
+        self.progress.message = "Prepared by facade"
+        return SimpleNamespace(ok=True, message="prepared")
+
+    def start(self):
+        self.calls.append(("start", None))
+        self.progress.state = PlotState.DRAWING
+        self.progress.message = "Drawing from facade"
+        return SimpleNamespace(ok=True, message="drawing")
+
+    def pause(self):
+        self.calls.append(("pause", None))
+        self.progress.state = PlotState.PAUSED
+        self.progress.message = "Paused by facade"
+        return SimpleNamespace(ok=True, message="paused")
+
+    def resume(self):
+        self.calls.append(("resume", None))
+        self.progress.state = PlotState.DRAWING
+        self.progress.message = "Resumed by facade"
+        return SimpleNamespace(ok=True, message="resumed")
+
+    def stop(self):
+        self.calls.append(("stop", None))
+        self.progress.state = PlotState.READY
+        self.progress.message = "Stopped by facade"
+        return SimpleNamespace(ok=True, message="stopped")
+
+    def reconfigure(self, *, machine_settings=None, plot_profile=None) -> None:
+        self.last_reconfigure = (machine_settings, plot_profile)
+
+    def get_progress(self) -> PlotProgress:
+        return self.progress
 
 
 class DriverTests(unittest.TestCase):
@@ -252,6 +306,61 @@ pen_down_command: M3 S900
         self.assertEqual(driver.bridge.speed_pendown, 1800)
         self.assertEqual(driver.bridge.pen_up_command, "M5")
         self.assertEqual(driver.bridge.pen_down_command, "M3 S900")
+
+    def test_driver_delegates_plot_commands_to_facade(self) -> None:
+        plot_facade = FakePlotFacade()
+        driver = Driver(bridge=FakeBridge(), plot_facade=plot_facade)
+
+        load_result = driver.load_svg("drawing.svg")
+        estimate_result = driver.estimate()
+        start_result = driver.start()
+        pause_result = driver.pause()
+        resume_result = driver.resume()
+        stop_result = driver.stop()
+
+        self.assertTrue(load_result.ok)
+        self.assertTrue(estimate_result.ok)
+        self.assertTrue(start_result.ok)
+        self.assertTrue(pause_result.ok)
+        self.assertTrue(resume_result.ok)
+        self.assertTrue(stop_result.ok)
+        self.assertEqual(
+            plot_facade.calls,
+            [
+                ("load_svg", "drawing.svg"),
+                ("prepare", None),
+                ("start", None),
+                ("pause", None),
+                ("resume", None),
+                ("stop", None),
+            ],
+        )
+        self.assertEqual(driver.get_progress().state, PlotState.READY)
+        self.assertEqual(driver.get_progress().message, "Stopped by facade")
+
+    def test_driver_updates_plot_profile_and_syncs_runtime(self) -> None:
+        plot_facade = FakePlotFacade()
+        driver = Driver(bridge=FakeBridge(), plot_facade=plot_facade)
+
+        driver.update_plot_profile(
+            pen_up_height=1.25,
+            pen_down_height=3.5,
+            speed_penup=8200.0,
+            speed_pendown=2100.0,
+            pen_move_speed=7600.0,
+            reordering=2,
+        )
+
+        self.assertEqual(driver.bridge.pen_up_z, 1.25)
+        self.assertEqual(driver.bridge.pen_down_z, 3.5)
+        self.assertEqual(driver.bridge.speed_penup, 8200.0)
+        self.assertEqual(driver.bridge.speed_pendown, 2100.0)
+        self.assertEqual(driver.bridge.pen_move_speed, 7600.0)
+        self.assertIsNotNone(plot_facade.last_reconfigure)
+        assert plot_facade.last_reconfigure is not None
+        _, synced_profile = plot_facade.last_reconfigure
+        self.assertEqual(synced_profile.pen_up_height, 1.25)
+        self.assertEqual(synced_profile.reordering, 2)
 
 
 if __name__ == "__main__":
