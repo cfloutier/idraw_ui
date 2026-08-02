@@ -70,6 +70,10 @@ class Driver:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Connect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Connect failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
 
     def disconnect(self) -> DriverCommandResult:
         try:
@@ -81,13 +85,22 @@ class Driver:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Disconnect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Disconnect failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
 
     def status(self) -> DriverCommandResult:
         try:
             status = self.bridge.get_status()
+            self.progress.state = PlotState.READY
             self.progress.message = f"Status: {status}"
             return DriverCommandResult(ok=True, message=status)
         except VendorBridgeError as exc:
+            self.progress.message = f"Status failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.message = f"Status failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
     def load_svg(self, path: str) -> DriverCommandResult:
@@ -124,21 +137,35 @@ class Driver:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Homing failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Homing failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
 
     def raise_pen(self) -> DriverCommandResult:
         try:
             response = self.bridge.raise_pen()
+            self.progress.state = PlotState.READY
             self.progress.message = "Pen raised"
             return DriverCommandResult(ok=True, message=response)
         except VendorBridgeError as exc:
+            self.progress.message = f"Pen raise failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.message = f"Pen raise failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
     def lower_pen(self) -> DriverCommandResult:
         try:
             response = self.bridge.lower_pen()
+            self.progress.state = PlotState.READY
             self.progress.message = "Pen lowered"
             return DriverCommandResult(ok=True, message=response)
         except VendorBridgeError as exc:
+            self.progress.message = f"Pen lower failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.message = f"Pen lower failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
     def get_progress(self) -> PlotProgress:

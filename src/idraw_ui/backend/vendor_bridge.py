@@ -76,11 +76,21 @@ class VendorBridge:
             raise VendorBridgeError("Device is not connected")
         return self._serial
 
+    @staticmethod
+    def _serial_error(context: str, exc: Exception) -> VendorBridgeError:
+        return VendorBridgeError(f"Serial communication error during {context}: {exc}")
+
     def _query_line(self, command: str, retries: int = 20) -> str:
         ser = self._require_connection()
-        ser.write(command.encode("ascii"))
+        try:
+            ser.write(command.encode("ascii"))
+        except (serial.SerialException, OSError) as exc:
+            raise self._serial_error("write", exc) from exc
         for _ in range(retries):
-            raw = ser.readline().decode("ascii", errors="replace").strip()
+            try:
+                raw = ser.readline().decode("ascii", errors="replace").strip()
+            except (serial.SerialException, OSError) as exc:
+                raise self._serial_error("read", exc) from exc
             if raw:
                 return raw
         return ""
@@ -92,10 +102,16 @@ class VendorBridge:
         retries: int = 30,
     ) -> str:
         ser = self._require_connection()
-        ser.write(command.encode("ascii"))
+        try:
+            ser.write(command.encode("ascii"))
+        except (serial.SerialException, OSError) as exc:
+            raise self._serial_error("write", exc) from exc
         lines: list[str] = []
         for _ in range(retries):
-            raw = ser.readline().decode("ascii", errors="replace").strip()
+            try:
+                raw = ser.readline().decode("ascii", errors="replace").strip()
+            except (serial.SerialException, OSError) as exc:
+                raise self._serial_error("read", exc) from exc
             if not raw:
                 continue
             lines.append(raw)
@@ -105,10 +121,16 @@ class VendorBridge:
 
     def _run_command_expect_ok(self, command: str, retries: int = 100) -> str:
         ser = self._require_connection()
-        ser.write(command.encode("ascii"))
+        try:
+            ser.write(command.encode("ascii"))
+        except (serial.SerialException, OSError) as exc:
+            raise self._serial_error("write", exc) from exc
         last_line = ""
         for _ in range(retries):
-            last_line = ser.readline().decode("ascii", errors="replace").strip()
+            try:
+                last_line = ser.readline().decode("ascii", errors="replace").strip()
+            except (serial.SerialException, OSError) as exc:
+                raise self._serial_error("read", exc) from exc
             if not last_line:
                 continue
             if last_line.lower().startswith("ok"):
@@ -130,9 +152,14 @@ class VendorBridge:
                 raise VendorBridgeError("No DrawCore-compatible USB device detected")
             selected_port = ports[0].device
 
-        ser = serial.Serial(
-            port=selected_port, baudrate=self.baudrate, timeout=self.timeout
-        )
+        try:
+            ser = serial.Serial(
+                port=selected_port, baudrate=self.baudrate, timeout=self.timeout
+            )
+        except (serial.SerialException, OSError) as exc:
+            raise VendorBridgeError(
+                f"Failed to open serial port {selected_port}: {exc}"
+            ) from exc
         ser.rts = False
         ser.dtr = False
         self._serial = ser
@@ -151,11 +178,13 @@ class VendorBridge:
                 raise VendorBridgeError(
                     "No response received from firmware version query"
                 )
-        except Exception:
+        except Exception as exc:
             ser.close()
             self._serial = None
             self.connected = False
-            raise
+            if isinstance(exc, VendorBridgeError):
+                raise
+            raise self._serial_error("connect handshake", exc) from exc
 
         self.connected = True
         return self.connected

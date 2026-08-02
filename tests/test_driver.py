@@ -21,11 +21,19 @@ from idraw_ui.backend.vendor_bridge import VendorBridgeError  # noqa: E402
 
 
 class FakeBridge:
-    def __init__(self, *, fail_on: str | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        fail_on: str | None = None,
+        fail_with_runtime_on: str | None = None,
+    ) -> None:
         self.fail_on = fail_on
+        self.fail_with_runtime_on = fail_with_runtime_on
         self.connected = False
 
     def _maybe_fail(self, op: str) -> None:
+        if self.fail_with_runtime_on == op:
+            raise RuntimeError(f"runtime failed {op}")
         if self.fail_on == op:
             raise VendorBridgeError(f"failed {op}")
 
@@ -84,6 +92,35 @@ class DriverTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("failed disconnect", result.message)
         self.assertEqual(driver.get_progress().state, "idle")
+
+    def test_connect_runtime_failure_is_reported(self) -> None:
+        driver = Driver(bridge=FakeBridge(fail_with_runtime_on="connect"))
+
+        result = driver.connect()
+
+        self.assertFalse(result.ok)
+        self.assertIn("runtime failed connect", result.message)
+        self.assertEqual(driver.get_progress().state, "idle")
+
+    def test_status_failure_updates_progress_message(self) -> None:
+        driver = Driver(bridge=FakeBridge(fail_on="status"))
+        driver.connect()
+
+        result = driver.status()
+
+        self.assertFalse(result.ok)
+        self.assertIn("failed status", result.message)
+        self.assertIn("Status failed", driver.get_progress().message)
+
+    def test_pen_action_failure_updates_progress_message(self) -> None:
+        driver = Driver(bridge=FakeBridge(fail_on="raise_pen"))
+        driver.connect()
+
+        result = driver.raise_pen()
+
+        self.assertFalse(result.ok)
+        self.assertIn("failed raise_pen", result.message)
+        self.assertIn("Pen raise failed", driver.get_progress().message)
 
     def test_driver_uses_machine_settings_for_bridge_configuration(self) -> None:
         machine_yaml = """
