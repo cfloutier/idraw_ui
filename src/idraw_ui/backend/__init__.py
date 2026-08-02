@@ -4,6 +4,7 @@ from idraw_ui.backend.idraw2_facade import (
     Idraw2Facade,
     IdrawRuntime,
 )
+from idraw_ui.backend.idraw2_runtime import Idraw2InternalRuntime
 from idraw_ui.backend.models import (
     AppState,
     MachineSettings,
@@ -26,6 +27,7 @@ __all__ = [
     "Idraw2Facade",
     "IdrawRuntime",
     "EngineCommandResult",
+    "Idraw2InternalRuntime",
     "MachineSettings",
     "PlotProfile",
     "AppState",

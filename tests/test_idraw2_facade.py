@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
 SRC_DIR = PROJECT_ROOT / "src"
@@ -20,15 +21,22 @@ class FakeRuntime:
         self.fail_on = fail_on
         self.calls: list[str] = []
         self.configured = False
+        self.status: dict[str, object] = {
+            "state": PlotState.IDLE,
+            "message": "Idle",
+        }
 
     def _maybe_fail(self, op: str) -> None:
         if self.fail_on == op:
+            self.status["state"] = PlotState.IDLE
+            self.status["message"] = f"runtime failed {op}"
             raise RuntimeError(f"runtime failed {op}")
 
     def configure(self, _machine, _profile) -> None:
         self._maybe_fail("configure")
         self.configured = True
         self.calls.append("configure")
+        self.status["message"] = "Configured"
 
     def load_svg(self, _path: Path) -> None:
         self._maybe_fail("load_svg")
@@ -37,32 +45,49 @@ class FakeRuntime:
     def prepare(self) -> dict[str, float]:
         self._maybe_fail("prepare")
         self.calls.append("prepare")
-        return {
+        metrics = {
             "estimated_seconds": 42.5,
             "distance_pen_down_mm": 123.0,
             "distance_total_mm": 245.5,
             "pen_lifts": 7,
         }
+        self.status.update(metrics)
+        self.status["state"] = PlotState.READY
+        self.status["message"] = "Prepared"
+        return metrics
 
     def start(self) -> None:
         self._maybe_fail("start")
         self.calls.append("start")
+        self.status["state"] = PlotState.DRAWING
+        self.status["message"] = "Drawing"
 
     def pause(self) -> None:
         self._maybe_fail("pause")
         self.calls.append("pause")
+        self.status["state"] = PlotState.PAUSED
+        self.status["message"] = "Paused"
 
     def resume(self) -> None:
         self._maybe_fail("resume")
         self.calls.append("resume")
+        self.status["state"] = PlotState.DRAWING
+        self.status["message"] = "Resumed"
 
     def stop(self) -> None:
         self._maybe_fail("stop")
         self.calls.append("stop")
+        self.status["state"] = PlotState.READY
+        self.status["message"] = "Stopped"
 
     def home(self) -> None:
         self._maybe_fail("home")
         self.calls.append("home")
+        self.status["state"] = PlotState.READY
+        self.status["message"] = "Homing completed"
+
+    def get_status(self) -> dict[str, object]:
+        return dict(self.status)
 
 
 class Idraw2FacadeTests(unittest.TestCase):
@@ -73,6 +98,18 @@ class Idraw2FacadeTests(unittest.TestCase):
         self.assertTrue(runtime.configured)
         self.assertIn("configure", runtime.calls)
         self.assertEqual(facade.get_progress().state, PlotState.IDLE)
+
+    def test_default_runtime_factory_is_used(self) -> None:
+        runtime = FakeRuntime()
+
+        with patch(
+            "idraw_ui.backend.idraw2_facade._default_runtime_factory",
+            return_value=runtime,
+        ):
+            facade = Idraw2Facade()
+
+        self.assertIs(facade.runtime, runtime)
+        self.assertTrue(runtime.configured)
 
     def test_load_svg_requires_existing_file(self) -> None:
         facade = Idraw2Facade(runtime=FakeRuntime())
@@ -100,6 +137,31 @@ class Idraw2FacadeTests(unittest.TestCase):
         self.assertEqual(progress.distance_pen_down_mm, 123.0)
         self.assertEqual(progress.distance_total_mm, 245.5)
         self.assertEqual(progress.pen_lifts, 7)
+
+    def test_get_progress_refreshes_live_runtime_status(self) -> None:
+        runtime = FakeRuntime()
+        facade = Idraw2Facade(runtime=runtime)
+        runtime.status.update(
+            {
+                "state": PlotState.DRAWING,
+                "message": "Drawing live",
+                "elapsed_seconds": 3.5,
+                "estimated_seconds": 9.0,
+                "distance_pen_down_mm": 11.0,
+                "distance_total_mm": 21.0,
+                "pen_lifts": 2,
+            }
+        )
+
+        progress = facade.get_progress()
+
+        self.assertEqual(progress.state, PlotState.DRAWING)
+        self.assertEqual(progress.message, "Drawing live")
+        self.assertEqual(progress.elapsed_seconds, 3.5)
+        self.assertEqual(progress.estimated_seconds, 9.0)
+        self.assertEqual(progress.distance_pen_down_mm, 11.0)
+        self.assertEqual(progress.distance_total_mm, 21.0)
+        self.assertEqual(progress.pen_lifts, 2)
 
     def test_start_auto_prepares_when_needed(self) -> None:
         runtime = FakeRuntime()

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from idraw_ui.backend.idraw2_runtime import Idraw2InternalRuntime
 from idraw_ui.backend.models import (
     MachineSettings,
     PlotProfile,
@@ -40,6 +41,12 @@ class IdrawRuntime(Protocol):
 
     def home(self) -> None: ...
 
+    def get_status(self) -> dict[str, Any]: ...
+
+
+def _default_runtime_factory() -> IdrawRuntime:
+    return Idraw2InternalRuntime()
+
 
 class Idraw2Facade:
     """UI-facing facade for future idraw2_0internal runtime integration."""
@@ -52,17 +59,16 @@ class Idraw2Facade:
     ) -> None:
         self.machine_settings = machine_settings or MachineSettings()
         self.plot_profile = plot_profile or PlotProfile()
-        self.runtime = runtime
+        self.runtime = runtime or _default_runtime_factory()
         self.progress = PlotProgress()
         self.svg_path: Path | None = None
         self._is_prepared = False
 
-        if self.runtime is not None:
-            try:
-                self.runtime.configure(self.machine_settings, self.plot_profile)
-            except Exception as exc:
-                self.progress.state = PlotState.IDLE
-                self.progress.message = f"Runtime configure failed: {exc}"
+        try:
+            self.runtime.configure(self.machine_settings, self.plot_profile)
+        except Exception as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Runtime configure failed: {exc}"
 
     def _fail(
         self, message: str, *, state: PlotState | None = None
@@ -76,6 +82,49 @@ class Idraw2Facade:
         if self.runtime is None:
             return self._fail("Runtime backend is not configured", state=PlotState.IDLE)
         return None
+
+    def _refresh_from_runtime_status(self) -> None:
+        runtime_error = self._require_runtime()
+        if runtime_error is not None:
+            return
+
+        try:
+            status = self.runtime.get_status()
+        except Exception:
+            return
+
+        state = status.get("state")
+        if isinstance(state, PlotState):
+            self.progress.state = state
+        elif isinstance(state, str):
+            try:
+                self.progress.state = PlotState(state)
+            except ValueError:
+                pass
+
+        estimated_seconds = status.get("estimated_seconds")
+        if estimated_seconds is not None:
+            self.progress.estimated_seconds = float(estimated_seconds)
+
+        elapsed_seconds = status.get("elapsed_seconds")
+        if elapsed_seconds is not None:
+            self.progress.elapsed_seconds = float(elapsed_seconds)
+
+        distance_pen_down_mm = status.get("distance_pen_down_mm")
+        if distance_pen_down_mm is not None:
+            self.progress.distance_pen_down_mm = float(distance_pen_down_mm)
+
+        distance_total_mm = status.get("distance_total_mm")
+        if distance_total_mm is not None:
+            self.progress.distance_total_mm = float(distance_total_mm)
+
+        pen_lifts = status.get("pen_lifts")
+        if pen_lifts is not None:
+            self.progress.pen_lifts = int(pen_lifts)
+
+        message = status.get("message")
+        if message:
+            self.progress.message = str(message)
 
     def load_svg(self, path: str | Path) -> EngineCommandResult:
         runtime_error = self._require_runtime()
@@ -208,4 +257,5 @@ class Idraw2Facade:
         return EngineCommandResult(ok=True, message="homed")
 
     def get_progress(self) -> PlotProgress:
+        self._refresh_from_runtime_status()
         return self.progress
