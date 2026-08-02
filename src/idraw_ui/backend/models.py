@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from typing import Optional
 
@@ -16,11 +16,20 @@ class PlotState(str, Enum):
 
 
 @dataclass
-class MachineProfile:
+class MachineSettings:
+    name: str = "machine-default"
+    machine_model: str = "idraw-2.0"
+    port: str | None = None
+    baudrate: int = 115200
+    serial_timeout: float = 1.0
+
+
+@dataclass
+class PlotProfile:
     name: str = "default"
-    machine_model: str = "default"
     pen_up_height: float = 0.5
     pen_down_height: float = 5.0
+    pen_move_speed: float | None = None
     speed_penup: float = 8000.0
     speed_pendown: float = 2000.0
     accel: float = 75.0
@@ -28,7 +37,15 @@ class MachineProfile:
     reordering: int = 0
     preview: bool = False
     digest: int = 1
-    field: dict[str, object] = field(default_factory=dict)
+    pen_up_command: str | None = None
+    pen_down_command: str | None = None
+
+
+@dataclass
+class AppState:
+    active_profile: str = "default"
+    last_svg_file: str | None = None
+    last_folder: str | None = None
 
 
 @dataclass

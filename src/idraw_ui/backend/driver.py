@@ -4,8 +4,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from idraw_ui.backend.models import MachineProfile, PlotProgress, PlotState
-from idraw_ui.backend.profiles import load_machine_profile
+from idraw_ui.backend.models import (
+    MachineSettings,
+    PlotProfile,
+    PlotProgress,
+    PlotState,
+)
+from idraw_ui.backend.profiles import load_machine_settings, load_plot_profile
 from idraw_ui.backend.vendor_bridge import VendorBridge, VendorBridgeError
 
 
@@ -20,58 +25,40 @@ class Driver:
 
     def __init__(
         self,
-        profile: Optional[MachineProfile] = None,
+        machine_settings: Optional[MachineSettings] = None,
+        plot_profile: Optional[PlotProfile] = None,
         bridge: VendorBridge | None = None,
     ) -> None:
-        self.profile = profile or MachineProfile()
+        self.machine_settings = machine_settings or MachineSettings()
+        self.plot_profile = plot_profile or PlotProfile()
         self.progress = PlotProgress()
         if bridge is not None:
             self.bridge = bridge
         else:
             self.bridge = VendorBridge(
-                port=self._profile_str("port"),
-                baudrate=self._profile_int("baudrate", 115200),
-                timeout=self._profile_float("serial_timeout", 1.0),
-                pen_up_command=self._profile_str("pen_up_command"),
-                pen_down_command=self._profile_str("pen_down_command"),
-                pen_up_z=self._profile_float(
-                    "pen_up_height", self.profile.pen_up_height
-                ),
-                pen_down_z=self._profile_float(
-                    "pen_down_height", self.profile.pen_down_height
-                ),
-                pen_move_speed=self._profile_float(
-                    "pen_move_speed", self.profile.speed_penup
-                ),
-                speed_penup=self._profile_float(
-                    "speed_penup", self.profile.speed_penup
-                ),
-                speed_pendown=self._profile_float(
-                    "speed_pendown", self.profile.speed_pendown
-                ),
+                port=self.machine_settings.port,
+                baudrate=self.machine_settings.baudrate,
+                timeout=self.machine_settings.serial_timeout,
+                pen_up_command=self.plot_profile.pen_up_command,
+                pen_down_command=self.plot_profile.pen_down_command,
+                pen_up_z=self.plot_profile.pen_up_height,
+                pen_down_z=self.plot_profile.pen_down_height,
+                pen_move_speed=self.plot_profile.pen_move_speed
+                or self.plot_profile.speed_penup,
+                speed_penup=self.plot_profile.speed_penup,
+                speed_pendown=self.plot_profile.speed_pendown,
             )
 
     @classmethod
-    def from_profile_file(cls, path: str | Path) -> "Driver":
-        return cls(profile=load_machine_profile(path))
-
-    def _profile_str(self, key: str) -> str | None:
-        value = self.profile.field.get(key)
-        if value is None:
-            return None
-        return str(value)
-
-    def _profile_int(self, key: str, default: int) -> int:
-        value = self.profile.field.get(key)
-        if value is None:
-            return default
-        return int(value)
-
-    def _profile_float(self, key: str, default: float) -> float:
-        value = self.profile.field.get(key)
-        if value is None:
-            return default
-        return float(value)
+    def from_config_files(
+        cls,
+        machine_settings_path: str | Path,
+        plot_profile_path: str | Path,
+    ) -> "Driver":
+        return cls(
+            machine_settings=load_machine_settings(machine_settings_path),
+            plot_profile=load_plot_profile(plot_profile_path),
+        )
 
     def connect(self) -> DriverCommandResult:
         try:

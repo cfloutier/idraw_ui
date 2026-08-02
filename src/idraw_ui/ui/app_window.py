@@ -29,8 +29,12 @@ class AppWindow:
         self._build_layout()
 
     @classmethod
-    def from_profile_file(cls, path: str | Path) -> "AppWindow":
-        return cls(Driver.from_profile_file(path))
+    def from_config_files(
+        cls,
+        machine_settings_path: str | Path,
+        plot_profile_path: str | Path,
+    ) -> "AppWindow":
+        return cls(Driver.from_config_files(machine_settings_path, plot_profile_path))
 
     def _build_layout(self) -> None:
         frame = ctk.CTkFrame(self.root, corner_radius=12)

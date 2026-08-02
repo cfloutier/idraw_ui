@@ -1,0 +1,5 @@
+name: machine-default
+machine_model: idraw-2.0
+port: null
+baudrate: 115200
+serial_timeout: 1.0
