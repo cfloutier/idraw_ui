@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from idraw_ui.backend.idraw2_facade import Idraw2Facade
 from idraw_ui.backend.models import (
@@ -111,31 +111,49 @@ class Driver:
             return DriverCommandResult(ok=False, message=str(exc))
 
     def load_svg(self, path: str) -> DriverCommandResult:
+        release_error = self._release_bridge_for_plot_runtime()
+        if release_error is not None:
+            return release_error
         result = self.plot_facade.load_svg(path)
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
     def estimate(self) -> DriverCommandResult:
+        release_error = self._release_bridge_for_plot_runtime()
+        if release_error is not None:
+            return release_error
         result = self.plot_facade.prepare()
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
     def start(self) -> DriverCommandResult:
+        release_error = self._release_bridge_for_plot_runtime()
+        if release_error is not None:
+            return release_error
         result = self.plot_facade.start()
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
     def pause(self) -> DriverCommandResult:
+        release_error = self._release_bridge_for_plot_runtime()
+        if release_error is not None:
+            return release_error
         result = self.plot_facade.pause()
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
     def resume(self) -> DriverCommandResult:
+        release_error = self._release_bridge_for_plot_runtime()
+        if release_error is not None:
+            return release_error
         result = self.plot_facade.resume()
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
     def stop(self) -> DriverCommandResult:
+        release_error = self._release_bridge_for_plot_runtime()
+        if release_error is not None:
+            return release_error
         result = self.plot_facade.stop()
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
@@ -167,46 +185,61 @@ class Driver:
         )
 
     def home(self) -> DriverCommandResult:
-        self.progress.state = PlotState.HOMING
-        try:
-            response = self.bridge.home()
-            self.progress.state = PlotState.READY
-            self.progress.message = "Homing completed"
-            return DriverCommandResult(ok=True, message=response)
-        except VendorBridgeError as exc:
-            self.progress.state = PlotState.IDLE
-            self.progress.message = f"Homing failed: {exc}"
-            return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
-            self.progress.state = PlotState.IDLE
-            self.progress.message = f"Homing failed: {exc}"
-            return DriverCommandResult(ok=False, message=str(exc))
+        return self._run_bridge_action_with_auto_disconnect(
+            self.bridge.home,
+            working_state=PlotState.HOMING,
+            success_message="Homing completed",
+            failure_prefix="Homing failed",
+        )
+
+    def center_for_test(self) -> DriverCommandResult:
+        def do_center() -> str:
+            self.bridge.home()
+            self.bridge.raise_pen()
+            return self.bridge.move_relative(
+                x_mm=300.0,
+                y_mm=-400.0,
+                feed_mm_min=self.plot_profile.speed_penup,
+            )
+
+        return self._run_bridge_action_with_auto_disconnect(
+            do_center,
+            working_state=PlotState.HOMING,
+            success_message="Center move completed (home + +300/-400 mm)",
+            failure_prefix="Center move failed",
+        )
+
+    def jog_for_test(self, x_mm: float, y_mm: float) -> DriverCommandResult:
+        def do_jog() -> str:
+            self.bridge.raise_pen()
+            return self.bridge.move_relative(
+                x_mm=x_mm,
+                y_mm=y_mm,
+                feed_mm_min=self.plot_profile.speed_penup,
+            )
+
+        return self._run_bridge_action_with_auto_disconnect(
+            do_jog,
+            working_state=None,
+            success_message=f"Jog move completed ({x_mm:+.1f}, {y_mm:+.1f} mm)",
+            failure_prefix="Jog move failed",
+        )
 
     def raise_pen(self) -> DriverCommandResult:
-        try:
-            response = self.bridge.raise_pen()
-            self.progress.state = PlotState.READY
-            self.progress.message = "Pen raised"
-            return DriverCommandResult(ok=True, message=response)
-        except VendorBridgeError as exc:
-            self.progress.message = f"Pen raise failed: {exc}"
-            return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
-            self.progress.message = f"Pen raise failed: {exc}"
-            return DriverCommandResult(ok=False, message=str(exc))
+        return self._run_bridge_action_with_auto_disconnect(
+            self.bridge.raise_pen,
+            working_state=None,
+            success_message="Pen raised",
+            failure_prefix="Pen raise failed",
+        )
 
     def lower_pen(self) -> DriverCommandResult:
-        try:
-            response = self.bridge.lower_pen()
-            self.progress.state = PlotState.READY
-            self.progress.message = "Pen lowered"
-            return DriverCommandResult(ok=True, message=response)
-        except VendorBridgeError as exc:
-            self.progress.message = f"Pen lower failed: {exc}"
-            return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
-            self.progress.message = f"Pen lower failed: {exc}"
-            return DriverCommandResult(ok=False, message=str(exc))
+        return self._run_bridge_action_with_auto_disconnect(
+            self.bridge.lower_pen,
+            working_state=None,
+            success_message="Pen lowered",
+            failure_prefix="Pen lower failed",
+        )
 
     def _sync_progress(self, source: PlotProgress) -> None:
         self.progress.state = source.state
@@ -227,3 +260,68 @@ class Driver:
         }:
             self._sync_progress(plot_progress)
         return self.progress
+
+    def _release_bridge_for_plot_runtime(self) -> DriverCommandResult | None:
+        if not self.bridge.connected:
+            return None
+
+        try:
+            self.bridge.disconnect()
+        except VendorBridgeError as exc:
+            self.progress.message = f"Bridge release failed before plot runtime: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.message = f"Bridge release failed before plot runtime: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+
+        return None
+
+    def _run_bridge_action_with_auto_disconnect(
+        self,
+        action: Callable[[], str],
+        *,
+        working_state: PlotState | None,
+        success_message: str,
+        failure_prefix: str,
+    ) -> DriverCommandResult:
+        if working_state is not None:
+            self.progress.state = working_state
+
+        action_error: Exception | None = None
+        response = ""
+        try:
+            self.bridge.connect()
+            response = action()
+        except VendorBridgeError as exc:
+            action_error = exc
+        except Exception as exc:
+            action_error = exc
+
+        disconnect_error: Exception | None = None
+        try:
+            self.bridge.disconnect()
+        except Exception as exc:
+            disconnect_error = exc
+
+        if action_error is not None:
+            self.progress.state = PlotState.IDLE
+            if disconnect_error is not None:
+                self.progress.message = f"{failure_prefix}: {action_error} | auto-disconnect failed: {disconnect_error}"
+                return DriverCommandResult(
+                    ok=False,
+                    message=f"{action_error} | auto-disconnect failed: {disconnect_error}",
+                )
+
+            self.progress.message = f"{failure_prefix}: {action_error}"
+            return DriverCommandResult(ok=False, message=str(action_error))
+
+        if disconnect_error is not None:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = (
+                f"{success_message}, but auto-disconnect failed: {disconnect_error}"
+            )
+            return DriverCommandResult(ok=False, message=str(disconnect_error))
+
+        self.progress.state = PlotState.IDLE
+        self.progress.message = f"{success_message} (auto-disconnected)"
+        return DriverCommandResult(ok=True, message=response)

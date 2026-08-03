@@ -8,6 +8,7 @@ from idraw_ui.ui.app_window import AppWindow
 
 def main() -> None:
     """Start the MVP UI wired to backend driver controls."""
+
     project_root = Path(__file__).resolve().parents[2]
     machine_settings = project_root / "settings" / "machine.yaml"
     default_profile = project_root / "profiles" / "default.yaml"

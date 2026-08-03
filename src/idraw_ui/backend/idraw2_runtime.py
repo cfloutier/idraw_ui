@@ -4,6 +4,7 @@ import os
 import tempfile
 import threading
 import time
+from optparse import Option, OptionParser
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Callable
@@ -16,7 +17,24 @@ from idraw_ui.backend.models import MachineSettings, PlotProfile, PlotState
 def _default_session_factory() -> Any:
     from idraw2_0internal.idraw import iDraw
 
-    return iDraw(default_logging=False)
+    def _parse_inkbool(_option: Option, _opt: str, value: str) -> bool:
+        return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+    class LegacyInkOption(Option):
+        TYPES = Option.TYPES + ("inkbool",)
+        TYPE_CHECKER = Option.TYPE_CHECKER.copy()
+        TYPE_CHECKER["inkbool"] = _parse_inkbool
+
+    class CompatIDraw(iDraw):
+        """Bridge legacy OptionParser-based init with modern ink_extensions."""
+
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            # idraw2_0internal still configures options through self.OptionParser,
+            # while recent ink_extensions.Effect exposes argparse via self.arg_parser.
+            self.OptionParser = OptionParser(option_class=LegacyInkOption)
+            super().__init__(*args, **kwargs)
+
+    return CompatIDraw(default_logging=False)
 
 
 def _map_machine_model(model_name: str) -> int:
@@ -257,6 +275,26 @@ class Idraw2InternalRuntime:
         if options is None:
             options = SimpleNamespace()
             session.options = options
+
+        option_parser = getattr(session, "OptionParser", None)
+        if option_parser is not None and hasattr(option_parser, "defaults"):
+            for key, value in option_parser.defaults.items():
+                if key.startswith("_"):
+                    continue
+                if not hasattr(options, key):
+                    setattr(options, key, value)
+
+        params = getattr(session, "params", None)
+        if params is not None:
+            for key, value in vars(params).items():
+                if key.startswith("_"):
+                    continue
+                if key in {"annotations"}:
+                    continue
+                if isinstance(value, (str, int, float, bool)) and not hasattr(
+                    options, key
+                ):
+                    setattr(options, key, value)
 
         options.mode = mode
         options.preview = preview

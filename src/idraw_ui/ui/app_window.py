@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from pathlib import Path
+import threading
+import time
 import tkinter as tk
 from tkinter import filedialog
 
@@ -54,11 +56,21 @@ class AppWindow:
         self.pause_button: ctk.CTkButton | None = None
         self.stop_button: ctk.CTkButton | None = None
         self.home_button: ctk.CTkButton | None = None
+        self.center_button: ctk.CTkButton | None = None
+        self.jog_pos_x_button: ctk.CTkButton | None = None
+        self.jog_pos_y_button: ctk.CTkButton | None = None
+        self.jog_neg_x_button: ctk.CTkButton | None = None
+        self.jog_neg_y_button: ctk.CTkButton | None = None
         self.connect_button: ctk.CTkButton | None = None
         self.disconnect_button: ctk.CTkButton | None = None
         self.trace_log: ctk.CTkTextbox | None = None
 
         self._last_loaded_svg: Path | None = None
+        self._is_loading_svg = False
+        self._svg_load_worker: threading.Thread | None = None
+        self._loading_stage: str | None = None
+        self._loading_started_at: float | None = None
+        self._loading_stage_started_at: float | None = None
 
         self._build_layout()
         self._refresh_view()
@@ -135,13 +147,46 @@ class AppWindow:
         )
         self.connect_button.grid(row=2, column=0, sticky="ew", padx=12, pady=(18, 6))
 
+        nav_bar = ctk.CTkFrame(controls, fg_color="transparent")
+        nav_bar.grid(row=3, column=0, sticky="ew", padx=12, pady=6)
+        nav_bar.grid_columnconfigure((0, 1), weight=1)
+
         self.home_button = ctk.CTkButton(
-            controls, text="Home", command=self.on_home, height=40
+            nav_bar, text="Home", command=self.on_home, height=40
         )
-        self.home_button.grid(row=3, column=0, sticky="ew", padx=12, pady=6)
+        self.home_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        self.center_button = ctk.CTkButton(
+            nav_bar, text="Center", command=self.on_center, height=40
+        )
+        self.center_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
+        jog_bar = ctk.CTkFrame(controls, fg_color="transparent")
+        jog_bar.grid(row=4, column=0, sticky="ew", padx=12, pady=6)
+        jog_bar.grid_columnconfigure((0, 1, 2, 3), weight=1)
+
+        self.jog_pos_x_button = ctk.CTkButton(
+            jog_bar, text="+10x", command=self.on_jog_pos_x, height=36
+        )
+        self.jog_pos_x_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        self.jog_pos_y_button = ctk.CTkButton(
+            jog_bar, text="+10y", command=self.on_jog_pos_y, height=36
+        )
+        self.jog_pos_y_button.grid(row=0, column=1, sticky="ew", padx=2)
+
+        self.jog_neg_x_button = ctk.CTkButton(
+            jog_bar, text="-10x", command=self.on_jog_neg_x, height=36
+        )
+        self.jog_neg_x_button.grid(row=0, column=2, sticky="ew", padx=2)
+
+        self.jog_neg_y_button = ctk.CTkButton(
+            jog_bar, text="-10y", command=self.on_jog_neg_y, height=36
+        )
+        self.jog_neg_y_button.grid(row=0, column=3, sticky="ew", padx=(4, 0))
 
         run_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        run_bar.grid(row=4, column=0, sticky="ew", padx=12, pady=(18, 6))
+        run_bar.grid(row=5, column=0, sticky="ew", padx=12, pady=(18, 6))
         run_bar.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.play_button = ctk.CTkButton(
@@ -173,7 +218,7 @@ class AppWindow:
             height=40,
         )
         self.disconnect_button.grid(
-            row=5, column=0, sticky="ew", padx=12, pady=(18, 12)
+            row=6, column=0, sticky="ew", padx=12, pady=(18, 12)
         )
 
         monitor = ctk.CTkFrame(tab, corner_radius=12)
@@ -465,35 +510,61 @@ class AppWindow:
             return ("#E3F8E8", "#22422B")
         return ("#FBE4E6", "#4A252B")
 
+    def _working_status_colors(self) -> tuple[str, str]:
+        return ("#FFF3CD", "#5B4A1C")
+
     def _set_status_style(self, ok: bool) -> None:
         if self.status_label is None:
             return
         light, dark = self._status_colors(ok)
         self.status_label.configure(fg_color=(light, dark))
 
+    def _set_status_working_style(self) -> None:
+        if self.status_label is None:
+            return
+        light, dark = self._working_status_colors()
+        self.status_label.configure(fg_color=(light, dark))
+
     def _append_trace_log(self, line: str) -> None:
         if self.trace_log is None:
             return
+        timestamp = time.strftime("%H:%M:%S")
         self.trace_log.configure(state="normal")
-        self.trace_log.insert("end", line.rstrip() + "\n")
+        self.trace_log.insert("end", f"[{timestamp}] {line.rstrip()}\n")
         self.trace_log.see("end")
         self.trace_log.configure(state="disabled")
 
-    def _update_from_result(self, result: DriverCommandResult) -> None:
+    def _append_trace_separator(self, title: str) -> None:
+        self._append_trace_log(f"--- {title} ---")
+
+    def _update_from_result(
+        self,
+        result: DriverCommandResult,
+        *,
+        action: str | None = None,
+    ) -> None:
         progress = self.driver.get_progress()
         self.state_var.set(f"State: {progress.state.value}")
+        action_prefix = f"[{action}] " if action else ""
         if result.ok:
-            self.status_var.set(f"OK: {result.message}")
+            self.status_var.set(f"OK: {action_prefix}{result.message}")
             self._set_status_style(ok=True)
         else:
-            self.status_var.set(f"ERROR: {result.message}")
+            self.status_var.set(f"ERROR: {action_prefix}{result.message}")
             self._set_status_style(ok=False)
         self._append_trace_log(self.status_var.get())
         self._refresh_view()
 
     def _refresh_view(self) -> None:
         progress = self.driver.get_progress()
-        self.state_var.set(f"State: {progress.state.value}")
+        if self._is_loading_svg:
+            stage = self._loading_stage or "loading"
+            elapsed = 0.0
+            if self._loading_stage_started_at is not None:
+                elapsed = max(0.0, time.perf_counter() - self._loading_stage_started_at)
+            self.state_var.set(f"State: {stage} ({elapsed:.1f}s)")
+        else:
+            self.state_var.set(f"State: {progress.state.value}")
         self.profile_var.set(f"Profile: {self.driver.plot_profile.name}")
         self.svg_var.set(
             f"SVG: {self._last_loaded_svg if self._last_loaded_svg is not None else 'none'}"
@@ -516,33 +587,68 @@ class AppWindow:
         self.progress_var.set(completion)
 
         has_svg = self._last_loaded_svg is not None
+        is_loading = self._is_loading_svg
         is_drawing = progress.state == PlotState.DRAWING
         is_paused = progress.state == PlotState.PAUSED
         can_resume = is_paused
-        can_start = has_svg and not is_drawing
+        can_start = has_svg and not is_drawing and not is_loading
 
         if self.load_button is not None:
-            self.load_button.configure(state="normal" if not is_drawing else "disabled")
+            self.load_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
         if self.reload_button is not None:
             self.reload_button.configure(
-                state="normal" if has_svg and not is_drawing else "disabled"
+                state="normal"
+                if (has_svg and not is_drawing and not is_loading)
+                else "disabled"
             )
         if self.connect_button is not None:
-            self.connect_button.configure(state="normal")
+            self.connect_button.configure(
+                state="normal" if not is_loading else "disabled"
+            )
         if self.disconnect_button is not None:
-            self.disconnect_button.configure(state="normal")
+            self.disconnect_button.configure(
+                state="normal" if not is_loading else "disabled"
+            )
         if self.home_button is not None:
-            self.home_button.configure(state="normal" if not is_drawing else "disabled")
+            self.home_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
+        if self.center_button is not None:
+            self.center_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
+        if self.jog_pos_x_button is not None:
+            self.jog_pos_x_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
+        if self.jog_pos_y_button is not None:
+            self.jog_pos_y_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
+        if self.jog_neg_x_button is not None:
+            self.jog_neg_x_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
+        if self.jog_neg_y_button is not None:
+            self.jog_neg_y_button.configure(
+                state="normal" if (not is_drawing and not is_loading) else "disabled"
+            )
         if self.play_button is not None:
             self.play_button.configure(
                 text="Resume" if can_resume else "Play",
                 state="normal" if (can_start or can_resume) else "disabled",
             )
         if self.pause_button is not None:
-            self.pause_button.configure(state="normal" if is_drawing else "disabled")
+            self.pause_button.configure(
+                state="normal" if (is_drawing and not is_loading) else "disabled"
+            )
         if self.stop_button is not None:
             self.stop_button.configure(
-                state="normal" if (is_drawing or is_paused) else "disabled"
+                state="normal"
+                if ((is_drawing or is_paused) and not is_loading)
+                else "disabled"
             )
 
     def _poll_progress(self) -> None:
@@ -561,12 +667,89 @@ class AppWindow:
         if not filename:
             return
         self._last_loaded_svg = Path(filename)
-        self._update_from_result(self.driver.load_svg(filename))
+        self._load_svg_and_estimate(filename)
 
     def on_reload_svg(self) -> None:
         if self._last_loaded_svg is None:
             return
-        self._update_from_result(self.driver.load_svg(str(self._last_loaded_svg)))
+        self._load_svg_and_estimate(str(self._last_loaded_svg))
+
+    def _load_svg_and_estimate(self, path: str) -> None:
+        if self._is_loading_svg:
+            self._append_trace_log("A load operation is already in progress.")
+            return
+
+        svg_name = Path(path).name
+        self._append_trace_separator(f"Load SVG: {svg_name}")
+        self._is_loading_svg = True
+        self._loading_stage = "loading"
+        self._loading_started_at = time.perf_counter()
+        self._loading_stage_started_at = self._loading_started_at
+        self.status_var.set(f"WORKING: [Load] {svg_name}")
+        self._set_status_working_style()
+        self._refresh_view()
+
+        worker = threading.Thread(
+            target=self._load_svg_and_estimate_worker,
+            args=(path,),
+            daemon=True,
+        )
+        self._svg_load_worker = worker
+        worker.start()
+
+    def _load_svg_and_estimate_worker(self, path: str) -> None:
+        load_started = time.perf_counter()
+        load_result: DriverCommandResult
+        estimate_result: DriverCommandResult | None = None
+        estimate_elapsed: float | None = None
+
+        try:
+            load_result = self.driver.load_svg(path)
+            load_elapsed = time.perf_counter() - load_started
+
+            if load_result.ok:
+
+                def switch_to_estimating() -> None:
+                    self._loading_stage = "estimating"
+                    self._loading_stage_started_at = time.perf_counter()
+                    self.status_var.set("WORKING: [Estimate] Running")
+                    self._set_status_working_style()
+                    self._refresh_view()
+
+                self.root.after(0, switch_to_estimating)
+                estimate_started = time.perf_counter()
+                estimate_result = self.driver.estimate()
+                estimate_elapsed = time.perf_counter() - estimate_started
+        except Exception as exc:
+            load_elapsed = time.perf_counter() - load_started
+            load_result = DriverCommandResult(
+                ok=False,
+                message=f"Unexpected load failure: {exc}",
+            )
+
+        def finish_on_ui_thread() -> None:
+            self._is_loading_svg = False
+            self._svg_load_worker = None
+            self._loading_stage = None
+            self._loading_started_at = None
+            self._loading_stage_started_at = None
+            self._update_from_result(load_result, action="Load")
+            self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")
+
+            if estimate_result is not None:
+                self._update_from_result(estimate_result, action="Estimate")
+                if estimate_elapsed is not None:
+                    self._append_trace_log(
+                        f"Estimate duration: {estimate_elapsed:.2f}s"
+                    )
+
+            self._refresh_view()
+
+        try:
+            self.root.after(0, finish_on_ui_thread)
+        except RuntimeError:
+            # Window may already be closed while background work is finishing.
+            return
 
     def on_play_pause_resume(self) -> None:
         progress = self.driver.get_progress()
@@ -592,6 +775,24 @@ class AppWindow:
 
     def on_home(self) -> None:
         self._update_from_result(self.driver.home())
+
+    def on_center(self) -> None:
+        self._update_from_result(self.driver.center_for_test(), action="Center")
+
+    def _jog(self, x_mm: float, y_mm: float, action: str) -> None:
+        self._update_from_result(self.driver.jog_for_test(x_mm, y_mm), action=action)
+
+    def on_jog_pos_x(self) -> None:
+        self._jog(10.0, 0.0, "+10x")
+
+    def on_jog_pos_y(self) -> None:
+        self._jog(0.0, 10.0, "+10y")
+
+    def on_jog_neg_x(self) -> None:
+        self._jog(-10.0, 0.0, "-10x")
+
+    def on_jog_neg_y(self) -> None:
+        self._jog(0.0, -10.0, "-10y")
 
     def on_pen_up(self) -> None:
         self._update_from_result(self.driver.raise_pen())

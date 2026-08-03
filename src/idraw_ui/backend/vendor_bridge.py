@@ -204,6 +204,20 @@ class VendorBridge:
     def home(self) -> str:
         return self._run_command_expect_ok("$H\r")
 
+    def move_relative(
+        self,
+        x_mm: float,
+        y_mm: float,
+        feed_mm_min: float | None = None,
+    ) -> str:
+        feed = feed_mm_min if feed_mm_min is not None else self.speed_penup
+        self._run_command_expect_ok("G91\r")
+        response = self._run_command_expect_ok(
+            f"G1 X{x_mm:.3f} Y{y_mm:.3f} F{feed:.1f}\r"
+        )
+        self._run_command_expect_ok("G90\r")
+        return response
+
     def _move_pen(self, z_pos: float, feed_restore: float) -> str:
         command = f"G1G90 Z{z_pos:.3f}F{self.pen_move_speed:.1f}\r"
         response = self._run_command_expect_ok(command)
