@@ -67,6 +67,13 @@ the first operational machine controls:
 `requirements.txt`, which removes any runtime dependency on
 `AppData/Roaming/inkscape/extensions`.
 
+## Documentation
+
+- Hardware observations and validated axis mapping:
+	- `docs/hardware_notes.md`
+- Architecture roles and implementation decisions:
+	- `docs/architecture_decisions.md`
+
 ## Profile-driven backend config
 
 Backend runtime settings can be loaded from a YAML profile file (for example

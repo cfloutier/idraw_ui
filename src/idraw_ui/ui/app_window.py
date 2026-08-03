@@ -5,6 +5,7 @@ import threading
 import time
 import tkinter as tk
 from tkinter import filedialog
+from typing import Callable
 
 import customtkinter as ctk
 
@@ -71,6 +72,12 @@ class AppWindow:
         self._loading_stage: str | None = None
         self._loading_started_at: float | None = None
         self._loading_stage_started_at: float | None = None
+        self._is_manual_action_running = False
+        self._manual_action_name: str | None = None
+        self._manual_action_started_at: float | None = None
+        self._manual_action_stop_requested = False
+        self._manual_action_stop_result: DriverCommandResult | None = None
+        self._manual_action_worker: threading.Thread | None = None
 
         self._build_layout()
         self._refresh_view()
@@ -96,19 +103,14 @@ class AppWindow:
 
         ctk.CTkLabel(
             header,
-            text="iDraw Control Workspace",
-            font=ctk.CTkFont(size=24, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(12, 2))
-        ctk.CTkLabel(
-            header,
             textvariable=self.profile_var,
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=1, column=0, sticky="w", padx=16)
+        ).grid(row=0, column=0, sticky="w", padx=16, pady=(10, 2))
         ctk.CTkLabel(
             header,
             textvariable=self.svg_var,
             font=ctk.CTkFont(size=12),
-        ).grid(row=2, column=0, sticky="w", padx=16, pady=(0, 10))
+        ).grid(row=1, column=0, sticky="w", padx=16, pady=(0, 10))
 
         tabs = ctk.CTkTabview(root_frame, corner_radius=12)
         tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
@@ -124,12 +126,14 @@ class AppWindow:
         self._build_options_tab(tabs.tab("Options"))
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
-        tab.grid_columnconfigure(0, weight=0)
-        tab.grid_columnconfigure(1, weight=1)
+        tab.grid_columnconfigure(0, weight=0, minsize=280)
+        tab.grid_columnconfigure(1, weight=1, minsize=420)
         tab.grid_rowconfigure(0, weight=1)
 
         controls = ctk.CTkFrame(tab, corner_radius=12)
-        controls.grid(row=0, column=0, sticky="nsw", padx=(8, 10), pady=8)
+        controls.configure(width=280)
+        controls.grid(row=0, column=0, sticky="nsew", padx=(8, 10), pady=8)
+        controls.grid_propagate(False)
         controls.grid_columnconfigure(0, weight=1)
 
         self.load_button = ctk.CTkButton(
@@ -223,7 +227,7 @@ class AppWindow:
 
         monitor = ctk.CTkFrame(tab, corner_radius=12)
         monitor.grid(row=0, column=1, sticky="nsew", padx=(0, 8), pady=8)
-        monitor.grid_rowconfigure(3, weight=1)
+        monitor.grid_rowconfigure(3, weight=3)
         monitor.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -248,7 +252,7 @@ class AppWindow:
             textvariable=self.metrics_var,
             anchor="w",
             justify="left",
-            wraplength=580,
+            wraplength=700,
             font=ctk.CTkFont(size=12),
         ).grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 8))
 
@@ -261,7 +265,7 @@ class AppWindow:
         progress.grid(row=0, column=0, sticky="ew", pady=(0, 8))
         progress.set(0)
 
-        self.trace_log = ctk.CTkTextbox(progress_frame, wrap="word")
+        self.trace_log = ctk.CTkTextbox(progress_frame, wrap="word", height=300)
         self.trace_log.grid(row=1, column=0, sticky="nsew")
         self.trace_log.insert("1.0", self.trace_report_var.get())
         self.trace_log.configure(state="disabled")
@@ -563,6 +567,12 @@ class AppWindow:
             if self._loading_stage_started_at is not None:
                 elapsed = max(0.0, time.perf_counter() - self._loading_stage_started_at)
             self.state_var.set(f"State: {stage} ({elapsed:.1f}s)")
+        elif self._is_manual_action_running:
+            action = self._manual_action_name or "manual"
+            elapsed = 0.0
+            if self._manual_action_started_at is not None:
+                elapsed = max(0.0, time.perf_counter() - self._manual_action_started_at)
+            self.state_var.set(f"State: moving [{action}] ({elapsed:.1f}s)")
         else:
             self.state_var.set(f"State: {progress.state.value}")
         self.profile_var.set(f"Profile: {self.driver.plot_profile.name}")
@@ -588,52 +598,67 @@ class AppWindow:
 
         has_svg = self._last_loaded_svg is not None
         is_loading = self._is_loading_svg
+        is_manual = self._is_manual_action_running
         is_drawing = progress.state == PlotState.DRAWING
         is_paused = progress.state == PlotState.PAUSED
         can_resume = is_paused
-        can_start = has_svg and not is_drawing and not is_loading
+        can_start = has_svg and not is_drawing and not is_loading and not is_manual
 
         if self.load_button is not None:
             self.load_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.reload_button is not None:
             self.reload_button.configure(
                 state="normal"
-                if (has_svg and not is_drawing and not is_loading)
+                if (has_svg and not is_drawing and not is_loading and not is_manual)
                 else "disabled"
             )
         if self.connect_button is not None:
             self.connect_button.configure(
-                state="normal" if not is_loading else "disabled"
+                state="normal" if (not is_loading and not is_manual) else "disabled"
             )
         if self.disconnect_button is not None:
             self.disconnect_button.configure(
-                state="normal" if not is_loading else "disabled"
+                state="normal" if (not is_loading and not is_manual) else "disabled"
             )
         if self.home_button is not None:
             self.home_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.center_button is not None:
             self.center_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.jog_pos_x_button is not None:
             self.jog_pos_x_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.jog_pos_y_button is not None:
             self.jog_pos_y_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.jog_neg_x_button is not None:
             self.jog_neg_x_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.jog_neg_y_button is not None:
             self.jog_neg_y_button.configure(
-                state="normal" if (not is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.play_button is not None:
             self.play_button.configure(
@@ -642,12 +667,14 @@ class AppWindow:
             )
         if self.pause_button is not None:
             self.pause_button.configure(
-                state="normal" if (is_drawing and not is_loading) else "disabled"
+                state="normal"
+                if (is_drawing and not is_loading and not is_manual)
+                else "disabled"
             )
         if self.stop_button is not None:
             self.stop_button.configure(
                 state="normal"
-                if ((is_drawing or is_paused) and not is_loading)
+                if ((is_drawing or is_paused or is_manual) and not is_loading)
                 else "disabled"
             )
 
@@ -752,6 +779,9 @@ class AppWindow:
             return
 
     def on_play_pause_resume(self) -> None:
+        if self._is_manual_action_running:
+            self._append_trace_log("Manual action in progress: wait or press Stop.")
+            return
         progress = self.driver.get_progress()
         if progress.state == PlotState.PAUSED:
             self._update_from_result(self.driver.resume())
@@ -759,9 +789,25 @@ class AppWindow:
             self._update_from_result(self.driver.start())
 
     def on_pause(self) -> None:
+        if self._is_manual_action_running:
+            self._append_trace_log("Cannot pause plot while manual action is running.")
+            return
         self._update_from_result(self.driver.pause())
 
     def on_stop(self) -> None:
+        if self._is_manual_action_running:
+            if self._manual_action_stop_requested:
+                self._append_trace_log("Stop already requested for manual action.")
+                return
+
+            self._manual_action_stop_requested = True
+            self.status_var.set("WORKING: [Stop] Stopping manual action...")
+            self._set_status_working_style()
+            self._append_trace_log("STOP requested for manual action.")
+            self._manual_action_stop_result = self.driver.stop_manual_action()
+            self._refresh_view()
+            return
+
         self._update_from_result(self.driver.stop())
 
     def on_connect(self) -> None:
@@ -774,13 +820,87 @@ class AppWindow:
         self._update_from_result(self.driver.status())
 
     def on_home(self) -> None:
-        self._update_from_result(self.driver.home())
+        self._run_manual_action_async("Home", self.driver.home)
 
     def on_center(self) -> None:
-        self._update_from_result(self.driver.center_for_test(), action="Center")
+        self._run_manual_action_async("Center", self.driver.center_for_test)
 
     def _jog(self, x_mm: float, y_mm: float, action: str) -> None:
-        self._update_from_result(self.driver.jog_for_test(x_mm, y_mm), action=action)
+        self._run_manual_action_async(
+            action,
+            lambda: self.driver.jog_for_test(x_mm, y_mm),
+        )
+
+    def _run_manual_action_async(
+        self,
+        action_name: str,
+        action_func: Callable[[], DriverCommandResult],
+    ) -> None:
+        if self._is_loading_svg:
+            self._append_trace_log(
+                "Cannot start manual action while SVG loading is running."
+            )
+            return
+        if self._is_manual_action_running:
+            self._append_trace_log("Another manual action is already running.")
+            return
+
+        self._is_manual_action_running = True
+        self._manual_action_name = action_name
+        self._manual_action_started_at = time.perf_counter()
+        self._manual_action_stop_requested = False
+        self._manual_action_stop_result = None
+        self.status_var.set(f"WORKING: [{action_name}] Running")
+        self._set_status_working_style()
+        self._refresh_view()
+
+        worker = threading.Thread(
+            target=self._manual_action_worker_run,
+            args=(action_name, action_func),
+            daemon=True,
+        )
+        self._manual_action_worker = worker
+        worker.start()
+
+    def _manual_action_worker_run(
+        self,
+        action_name: str,
+        action_func: Callable[[], DriverCommandResult],
+    ) -> None:
+        try:
+            action_result = action_func()
+        except Exception as exc:
+            action_result = DriverCommandResult(
+                ok=False,
+                message=f"Unexpected {action_name.lower()} failure: {exc}",
+            )
+
+        def finish_on_ui_thread() -> None:
+            stop_requested = self._manual_action_stop_requested
+            stop_result = self._manual_action_stop_result
+
+            self._is_manual_action_running = False
+            self._manual_action_name = None
+            self._manual_action_started_at = None
+            self._manual_action_stop_requested = False
+            self._manual_action_stop_result = None
+            self._manual_action_worker = None
+
+            if stop_requested:
+                final_stop_result = stop_result or DriverCommandResult(
+                    ok=True,
+                    message="manual action stopped",
+                )
+                self._update_from_result(final_stop_result, action="Stop")
+            else:
+                self._update_from_result(action_result, action=action_name)
+
+            self._refresh_view()
+
+        try:
+            self.root.after(0, finish_on_ui_thread)
+        except RuntimeError:
+            return
 
     def on_jog_pos_x(self) -> None:
         self._jog(10.0, 0.0, "+10x")

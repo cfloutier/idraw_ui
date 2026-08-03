@@ -241,6 +241,21 @@ class Driver:
             failure_prefix="Pen lower failed",
         )
 
+    def stop_manual_action(self) -> DriverCommandResult:
+        try:
+            self.bridge.disconnect()
+            self.progress.state = PlotState.IDLE
+            self.progress.message = "Manual action stopped"
+            return DriverCommandResult(ok=True, message="manual action stopped")
+        except VendorBridgeError as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Manual stop failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+        except Exception as exc:
+            self.progress.state = PlotState.IDLE
+            self.progress.message = f"Manual stop failed: {exc}"
+            return DriverCommandResult(ok=False, message=str(exc))
+
     def _sync_progress(self, source: PlotProgress) -> None:
         self.progress.state = source.state
         self.progress.elapsed_seconds = source.elapsed_seconds

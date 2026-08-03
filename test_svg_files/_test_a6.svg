@@ -23,9 +23,9 @@
      inkscape:pagecheckerboard="1"
      inkscape:deskcolor="#505050"
      inkscape:document-units="mm"
-     inkscape:zoom="1.9477379"
-     inkscape:cx="96.778934"
-     inkscape:cy="77.269122"
+     inkscape:zoom="0.97386895"
+     inkscape:cx="132.97477"
+     inkscape:cy="129.89427"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
      inkscape:window-x="-8"
@@ -58,6 +58,13 @@
        style="fill:none;fill-opacity:0.423141;stroke:#ffffff;stroke-width:0.377953;stroke-opacity:0.511737"
        d="m 21.056321,24.142161 h 5.4456 v 12.52488 h 7.80536 v -12.7064 h 6.534721 l -10.437401,-10.4374 z"
        id="path2" />
+    <rect
+       style="fill:none;stroke:#000000;stroke-width:0.826931;stroke-linecap:square"
+       id="rect2"
+       width="396.02347"
+       height="558.54315"
+       x="0.41346142"
+       y="0.41346142" />
   </g>
   <plotdata
      application="idraw"

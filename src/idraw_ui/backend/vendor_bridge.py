@@ -80,6 +80,15 @@ class VendorBridge:
     def _serial_error(context: str, exc: Exception) -> VendorBridgeError:
         return VendorBridgeError(f"Serial communication error during {context}: {exc}")
 
+    @staticmethod
+    def _is_disconnect_race_error(exc: Exception) -> bool:
+        message = str(exc)
+        known_patterns = (
+            "hEvent",
+            "byref() argument 1 must be _ctypes._CData",
+        )
+        return any(pattern in message for pattern in known_patterns)
+
     def _query_line(self, command: str, retries: int = 20) -> str:
         ser = self._require_connection()
         try:
@@ -190,10 +199,21 @@ class VendorBridge:
         return self.connected
 
     def disconnect(self) -> None:
-        if self._serial is not None and self._serial.is_open:
-            self._serial.close()
+        ser = self._serial
         self._serial = None
         self.connected = False
+
+        if ser is None:
+            return
+
+        try:
+            if getattr(ser, "is_open", False):
+                ser.close()
+        except Exception as exc:
+            # On Windows, concurrent stop/disconnect can hit pyserial teardown races.
+            if self._is_disconnect_race_error(exc):
+                return
+            raise self._serial_error("disconnect", exc) from exc
 
     def get_status(self) -> str:
         status = self._query_best_line("?\r", preferred_prefixes=("<",))

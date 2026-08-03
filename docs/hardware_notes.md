@@ -8,7 +8,7 @@
 
 Context:
 - Test action: press `Center` after `Home`.
-- Center command currently sends a relative move of +100 mm in X and -100 mm in Y.
+- Center command currently sends a sequence: `Home`, then relative move of +300 mm in X and -400 mm in Y.
 - Initial position before test: carriage manually placed near center.
 
 Observed behavior (user validation on machine):
@@ -23,7 +23,11 @@ Interpretation to keep for adjustments:
 
 Center implication:
 - From `Home` (bottom-right), an inward safe test move is `+X` and `-Y`.
-- This matches the current `Center` implementation (`+100 X`, `-100 Y`).
+- This matches the current `Center` implementation (`Home`, then `+300 X`, `-400 Y`).
+
+Manual stop behavior:
+- During manual actions (home/center/jog), the Stop button triggers forced disconnect.
+- This interruption is best effort (serial teardown); exact stop timing depends on firmware command state.
 
 Practical impact:
 - Do not assume a "math-style" axis orientation for this machine.
