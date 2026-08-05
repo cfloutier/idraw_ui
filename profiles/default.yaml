@@ -9,5 +9,5 @@ pen_up_command: null
 pen_up_height: 1.455026455026455
 preview: false
 reordering: 0
-speed_pendown: 200.0
-speed_penup: 500.0
+speed_pendown: 2000.0
+speed_penup: 8000.0

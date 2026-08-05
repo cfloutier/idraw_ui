@@ -144,6 +144,27 @@ Supported profile keys for the current plot profile include:
 - `pen_up_command`
 - `pen_down_command`
 
+### Important note: speed units and time estimation
+
+The UI exposes speed sliders as `mm/min` values (`speed_penup`, `speed_pendown`).
+
+During estimation (`prepare`, preview mode), these values are converted to the
+runtime scale expected by the iDraw internal estimator:
+
+- `in/s = mm/min / (25.4 * 60)`
+
+Why this matters:
+
+- Without this conversion, large UI speed values can produce nearly identical
+	estimated times (saturation effect).
+- With conversion applied in preview mode, the estimate becomes sensitive to
+	speed changes again.
+
+Safety rule implemented in code:
+
+- Conversion is applied only for estimation/preview sessions.
+- Real plotting sessions keep the raw profile speed values unchanged.
+
 ## Development tooling
 
 For local formatting and linting, install the development hook once in the

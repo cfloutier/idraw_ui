@@ -22,7 +22,7 @@ from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.progress_bar import ProgressBar
 from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
-from idraw_ui.ui.tools import format_duration, format_float
+from idraw_ui.ui.tools import _mm_min_to_inch_s, format_duration, format_float
 
 
 class AppWindow:
@@ -767,10 +767,16 @@ class AppWindow:
                         f"Estimate duration: {estimate_elapsed:.2f}s"
                     )
                 estimate_txt = format_duration(estimate_value)
+                speed_penup_mm_min = float(self.driver.plot_profile.speed_penup)
+                speed_pendown_mm_min = float(self.driver.plot_profile.speed_pendown)
+                speed_penup_in_s = _mm_min_to_inch_s(speed_penup_mm_min)
+                speed_pendown_in_s = _mm_min_to_inch_s(speed_pendown_mm_min)
                 self._append_trace_log(
                     "Estimate inputs: "
-                    f"speed_penup={self.driver.plot_profile.speed_penup:.0f}, "
-                    f"speed_pendown={self.driver.plot_profile.speed_pendown:.0f}, "
+                    f"speed_penup={speed_penup_mm_min:.0f} mm/min "
+                    f"({speed_penup_in_s:.4f} in/s preview), "
+                    f"speed_pendown={speed_pendown_mm_min:.0f} mm/min "
+                    f"({speed_pendown_in_s:.4f} in/s preview), "
                     f"accel={self.driver.plot_profile.accel:.1f} -> "
                     f"estimated={estimate_txt}"
                 )

@@ -31,3 +31,7 @@ def format_distance_mm(value_mm: float) -> str:
     if value_mm >= 10.0:
         return f"{format_float(value_mm / 10.0)} cm"
     return f"{format_float(value_mm)} mm"
+
+
+def _mm_min_to_inch_s(speed_mm_min: float) -> float:
+    return float(speed_mm_min) / (25.4 * 60.0)

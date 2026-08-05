@@ -5,6 +5,7 @@ import sys
 import tempfile
 import time
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -153,6 +154,53 @@ class Idraw2InternalRuntimeTests(unittest.TestCase):
         status = runtime.get_status()
         self.assertEqual(status["state"], "ready")
         self.assertEqual(status["message"], "Stopped")
+
+    def test_prepare_uses_converted_speeds_for_estimate_only(self) -> None:
+        factory = FakeSessionFactory()
+        runtime = Idraw2InternalRuntime(session_factory=factory)
+        runtime.plot_profile = replace(
+            runtime.plot_profile,
+            speed_penup=8000.0,
+            speed_pendown=2000.0,
+            accel=75.0,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+
+            runtime.load_svg(svg_path)
+            runtime.prepare()
+
+        self.assertGreaterEqual(len(factory.sessions), 1)
+        session = factory.sessions[-1]
+        self.assertTrue(session.options.preview)
+        self.assertAlmostEqual(session.options.speed_penup, 8000.0 / (25.4 * 60.0))
+        self.assertAlmostEqual(session.options.speed_pendown, 2000.0 / (25.4 * 60.0))
+
+    def test_start_keeps_raw_speeds_for_real_plot(self) -> None:
+        factory = FakeSessionFactory(wait_for_pause=True)
+        runtime = Idraw2InternalRuntime(session_factory=factory)
+        runtime.plot_profile = replace(
+            runtime.plot_profile,
+            speed_penup=8000.0,
+            speed_pendown=2000.0,
+            accel=75.0,
+        )
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+
+            runtime.load_svg(svg_path)
+            runtime.start()
+            runtime.stop()
+
+        self.assertGreaterEqual(len(factory.sessions), 1)
+        session = factory.sessions[-1]
+        self.assertFalse(session.options.preview)
+        self.assertEqual(session.options.speed_penup, 8000.0)
+        self.assertEqual(session.options.speed_pendown, 2000.0)
 
 
 if __name__ == "__main__":

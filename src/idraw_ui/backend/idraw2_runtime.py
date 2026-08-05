@@ -293,8 +293,14 @@ class Idraw2InternalRuntime:
         options.preview = preview
         digest = int(getattr(self.machine_settings, "digest", 1))
         options.digest = max(0, min(2, digest))
-        options.speed_pendown = self.plot_profile.speed_pendown
-        options.speed_penup = self.plot_profile.speed_penup
+        if preview:
+            options.speed_pendown = self._mm_min_to_inch_s(
+                self.plot_profile.speed_pendown
+            )
+            options.speed_penup = self._mm_min_to_inch_s(self.plot_profile.speed_penup)
+        else:
+            options.speed_pendown = self.plot_profile.speed_pendown
+            options.speed_penup = self.plot_profile.speed_penup
         options.accel = self.plot_profile.accel
         options.auto_rotate = self.plot_profile.auto_rotate
         options.reordering = self.plot_profile.reordering
@@ -309,6 +315,10 @@ class Idraw2InternalRuntime:
         # Use explicit port when provided, otherwise auto-detect first available device.
         options.port = self.machine_settings.port
         options.port_config = 2 if self.machine_settings.port else 1
+
+    @staticmethod
+    def _mm_min_to_inch_s(speed_mm_min: float) -> float:
+        return float(speed_mm_min) / (25.4 * 60.0)
 
     def _persist_resume_snapshot(self, session: Any) -> None:
         if not hasattr(session, "get_output"):

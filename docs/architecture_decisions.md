@@ -123,6 +123,23 @@ Result:
 - Stop triggers forced disconnect (`stop_manual_action`) to interrupt as early as possible.
 - This is best effort by serial teardown; exact interruption timing depends on firmware state.
 
+### 6) Estimation uses preview-only speed scale conversion
+
+Reason:
+- UI profile speeds are represented in `mm/min`.
+- The internal iDraw estimator is more coherent when speeds are provided on its
+  expected scale (`in/s`) during preview.
+- Empirical tests showed that skipping conversion can flatten estimates across
+  very different speed values.
+
+Result:
+- For estimation (`prepare`, preview mode), speeds are converted with:
+  - `in/s = mm/min / (25.4 * 60)`
+- For real plotting (`start`/`resume`/`home`, non-preview), raw profile speed
+  values are preserved.
+- UI trace logs now print both the UI speed values and preview-converted values
+  used for estimation diagnostics.
+
 ## Operational notes
 
 - Axis mapping and hardware validation logs are tracked in `docs/hardware_notes.md`.
