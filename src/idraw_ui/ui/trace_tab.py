@@ -16,6 +16,7 @@ class TraceTab:
         self.tab.grid_columnconfigure(0, weight=0, minsize=280)
         self.tab.grid_columnconfigure(1, weight=1, minsize=420)
         self.tab.grid_rowconfigure(0, weight=1)
+        self.tab.grid_rowconfigure(1, weight=0)
 
         controls = ctk.CTkFrame(self.tab, corner_radius=12)
         controls.configure(width=280)
@@ -118,14 +119,8 @@ class TraceTab:
 
         monitor = ctk.CTkFrame(self.tab, corner_radius=12)
         monitor.grid(row=0, column=1, sticky="nsew", padx=(0, 8), pady=8)
-        monitor.grid_rowconfigure(3, weight=3)
+        monitor.grid_rowconfigure(1, weight=1)
         monitor.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            monitor,
-            textvariable=self.window.state_var,
-            font=ctk.CTkFont(size=14, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
 
         self.window.status_label = ctk.CTkLabel(
             monitor,
@@ -137,28 +132,22 @@ class TraceTab:
             height=38,
         )
         self.window.status_label.grid(
-            row=1, column=0, sticky="ew", padx=14, pady=(0, 8)
+            row=0, column=0, sticky="ew", padx=14, pady=(12, 8)
         )
 
-        ctk.CTkLabel(
-            monitor,
-            textvariable=self.window.metrics_var,
-            anchor="w",
-            justify="left",
-            wraplength=700,
-            font=ctk.CTkFont(size=12),
-        ).grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 8))
-
-        progress_frame = ctk.CTkFrame(monitor, fg_color="transparent")
-        progress_frame.grid(row=3, column=0, sticky="nsew", padx=14, pady=(0, 12))
-        progress_frame.grid_rowconfigure(1, weight=1)
-        progress_frame.grid_columnconfigure(0, weight=1)
-
-        progress = ctk.CTkProgressBar(progress_frame, variable=self.window.progress_var)
-        progress.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        progress.set(0)
-
-        self.window.trace_log = ctk.CTkTextbox(progress_frame, wrap="word", height=300)
-        self.window.trace_log.grid(row=1, column=0, sticky="nsew")
+        self.window.trace_log = ctk.CTkTextbox(monitor, wrap="word", height=300)
+        self.window.trace_log.grid(
+            row=1, column=0, sticky="nsew", padx=14, pady=(0, 12)
+        )
         self.window.trace_log.insert("1.0", self.window.trace_report_var.get())
         self.window.trace_log.configure(state="disabled")
+
+        progress_row = ctk.CTkFrame(self.tab, fg_color="transparent")
+        progress_row.grid(
+            row=1, column=0, columnspan=2, sticky="ew", padx=8, pady=(0, 8)
+        )
+        progress_row.grid_columnconfigure(0, weight=1)
+
+        progress = ctk.CTkProgressBar(progress_row, variable=self.window.progress_var)
+        progress.grid(row=0, column=0, sticky="ew", padx=4, pady=(0, 2))
+        progress.set(0)

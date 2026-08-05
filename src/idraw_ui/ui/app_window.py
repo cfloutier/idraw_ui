@@ -15,6 +15,7 @@ from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.ui.options_tab import OptionsTab
 from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.speed_tab import SpeedTab
+from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
 
 
@@ -40,9 +41,6 @@ class AppWindow:
 
         self.status_var = tk.StringVar(value="Ready")
         self.state_var = tk.StringVar(value="State: idle")
-        self.profile_var = tk.StringVar(
-            value=f"Profile: {self.driver.plot_profile.name}"
-        )
         self.svg_var = tk.StringVar(value="SVG: none")
         self.metrics_var = tk.StringVar(value="Estimated: - | Elapsed: - | Distance: -")
         self.progress_var = tk.DoubleVar(value=0.0)
@@ -64,6 +62,7 @@ class AppWindow:
         self.status_label: ctk.CTkLabel | None = None
         self.profile_selector: ctk.CTkOptionMenu | None = None
         self._profile_selector_var = tk.StringVar(value=self.driver.plot_profile.name)
+        self.new_profile_button: ctk.CTkButton | None = None
         self.load_button: ctk.CTkButton | None = None
         self.reload_button: ctk.CTkButton | None = None
         self.play_button: ctk.CTkButton | None = None
@@ -111,43 +110,7 @@ class AppWindow:
         root_frame.grid_rowconfigure(1, weight=1)
         root_frame.grid_columnconfigure(0, weight=1)
 
-        header = ctk.CTkFrame(root_frame, corner_radius=12)
-        header.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 8))
-        header.grid_columnconfigure(0, weight=1)
-        header.grid_columnconfigure(1, weight=0)
-
-        left_header = ctk.CTkFrame(header, fg_color="transparent")
-        left_header.grid(row=0, column=0, sticky="w", padx=16, pady=(10, 6))
-        ctk.CTkLabel(
-            left_header,
-            textvariable=self.profile_var,
-            font=ctk.CTkFont(size=13, weight="bold"),
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            left_header,
-            textvariable=self.svg_var,
-            font=ctk.CTkFont(size=12),
-        ).pack(anchor="w", pady=(2, 0))
-
-        controls_header = ctk.CTkFrame(header, fg_color="transparent")
-        controls_header.grid(row=0, column=1, sticky="e", padx=16, pady=(10, 6))
-
-        self.profile_selector = ctk.CTkOptionMenu(
-            controls_header,
-            variable=self._profile_selector_var,
-            values=self.settings_service.list_profile_names(),
-            command=self.on_profile_select,
-        )
-        self.profile_selector.pack(side="left")
-        self._sync_profile_selector(self.driver.plot_profile.name)
-
-        self.new_profile_button = ctk.CTkButton(
-            controls_header,
-            text="New profile",
-            width=110,
-            command=self.on_create_profile,
-        )
-        self.new_profile_button.pack(side="left", padx=(8, 0))
+        TopBar(self, root_frame)
 
         tabs = ctk.CTkTabview(root_frame, corner_radius=12)
         tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
@@ -297,7 +260,6 @@ class AppWindow:
             self.state_var.set(f"State: moving [{action}] ({elapsed:.1f}s)")
         else:
             self.state_var.set(f"State: {progress.state.value}")
-        self.profile_var.set(f"Profile: {self.driver.plot_profile.name}")
         self.svg_var.set(
             f"SVG: {self._last_loaded_svg if self._last_loaded_svg is not None else 'none'}"
         )
@@ -531,7 +493,6 @@ class AppWindow:
         }
 
     def _sync_profile_controls(self, profile) -> None:
-        self.profile_var.set(f"Profile: {profile.name}")
         self._sync_profile_selector(profile.name)
         self.pen_up_var.set(profile.pen_up_height)
         self.pen_down_var.set(profile.pen_down_height)
