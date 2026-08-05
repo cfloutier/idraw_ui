@@ -4,7 +4,7 @@ import customtkinter as ctk
 
 
 class SvgInfoBar:
-    """Top-left SVG and plotting status information."""
+    """Top-left loaded SVG information."""
 
     def __init__(self, window, parent: ctk.CTkFrame) -> None:
         self.window = window
@@ -17,16 +17,3 @@ class SvgInfoBar:
             textvariable=self.window.svg_var,
             font=ctk.CTkFont(size=13, weight="bold"),
         ).pack(anchor="w")
-
-        ctk.CTkLabel(
-            self.parent,
-            textvariable=self.window.state_var,
-            font=ctk.CTkFont(size=12),
-        ).pack(anchor="w", pady=(1, 0))
-
-        ctk.CTkLabel(
-            self.parent,
-            textvariable=self.window.metrics_var,
-            font=ctk.CTkFont(size=12),
-            justify="left",
-        ).pack(anchor="w", pady=(1, 0))

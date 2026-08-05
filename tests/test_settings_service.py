@@ -74,6 +74,24 @@ def test_app_state_persists_jog_distance(tmp_path: Path) -> None:
     assert payload["jog_distance_mm"] == 37.0
 
 
+def test_app_state_persists_last_svg_file_and_folder(tmp_path: Path) -> None:
+    service = SettingsService(root_dir=tmp_path)
+
+    svg_path = tmp_path / "samples" / "drawing.svg"
+    service.app_state.last_svg_file = str(svg_path)
+    service.app_state.last_folder = str(svg_path.parent)
+    service.save_app_state()
+
+    reloaded = SettingsService(root_dir=tmp_path)
+    assert reloaded.app_state.last_svg_file == str(svg_path)
+    assert reloaded.app_state.last_folder == str(svg_path.parent)
+
+    state_path = tmp_path / "settings" / "app_state.yaml"
+    payload = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+    assert payload["last_svg_file"] == str(svg_path)
+    assert payload["last_folder"] == str(svg_path.parent)
+
+
 def test_machine_settings_persist_selected_model(tmp_path: Path) -> None:
     service = SettingsService(root_dir=tmp_path)
 

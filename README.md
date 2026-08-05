@@ -52,14 +52,17 @@ python -m idraw_ui.app
 ```
 
 The UI is now built with `customtkinter` for a cleaner visual style and exposes
-the first operational machine controls:
+the current operational workflow through five tabs:
 
-- Connect
-- Status
-- Home
-- Pen Up
-- Pen Down
-- Disconnect
+- `Trace`: load or reload an SVG, start/pause/stop a plot, and access quick
+	`Home`, `Center`, `Pen Up`, and `Pen Down` actions.
+- `Jog`: manual homing, centering, and XY jogging.
+- `Pen`: pen height tuning and live pen tests.
+- `Draw Options`: speed, acceleration, ordering, and preview defaults.
+- `Machine`: machine model selection.
+
+The loaded SVG name is shown in the top bar. Operational state, timing, and
+distance metrics are consolidated in the colored footer status area.
 
 ## DrawCore dependency
 
@@ -85,10 +88,13 @@ The active profile and profile values are saved automatically as the user change
 - Profile values are written to YAML files under `profiles/`.
 - Changing a plot option in the UI immediately updates the current profile and persists it.
 - A new profile can be created from the UI through the header action.
+- The last selected SVG path is remembered so `Reload` can reopen it on demand
+	after restarting the app.
 
 ### Files involved
 
-- `settings/app_state.yaml` stores the active profile and small app-state values.
+- `settings/app_state.yaml` stores the active profile, small app-state values,
+  and the last SVG path/folder used by the Trace page.
 - `settings/machine.yaml` stores machine configuration.
 - `profiles/*.yaml` stores individual plot profiles.
 

@@ -51,6 +51,7 @@ class AppWindow:
         self.root.minsize(880, 620)
 
         self.status_var = tk.StringVar(value="Ready")
+        self._status_message = "Ready"
         self.state_var = tk.StringVar(value="State: idle")
         self.svg_var = tk.StringVar(value="SVG: none")
         self.metrics_var = tk.StringVar(value="Estimated: - | Elapsed: - | Distance: -")
@@ -90,6 +91,8 @@ class AppWindow:
         self.stop_button: ctk.CTkButton | None = None
         self.home_button: ctk.CTkButton | None = None
         self.center_button: ctk.CTkButton | None = None
+        self.trace_home_button: ctk.CTkButton | None = None
+        self.trace_center_button: ctk.CTkButton | None = None
         self.jog_pos_x_button: ctk.CTkButton | None = None
         self.jog_pos_y_button: ctk.CTkButton | None = None
         self.jog_neg_x_button: ctk.CTkButton | None = None
@@ -100,6 +103,7 @@ class AppWindow:
         self.progress_bar: ProgressBar | None = None
 
         self._last_loaded_svg: Path | None = None
+        self._last_reloadable_svg: Path | None = None
         self._is_loading_svg = False
         self._svg_load_worker: threading.Thread | None = None
         self._loading_stage: str | None = None
@@ -114,6 +118,7 @@ class AppWindow:
 
         self.driver.add_profile_change_listener(self._on_driver_profile_changed)
         self._build_layout()
+        self._restore_last_svg_file()
         self._refresh_view()
         self.root.after(400, self._poll_progress)
 
@@ -166,7 +171,7 @@ class AppWindow:
             corner_radius=8,
             fg_color=("#E8ECF2", "#2A2D35"),
             justify="left",
-            height=36,
+            height=52,
         )
         self.status_label.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 4))
 
@@ -337,6 +342,13 @@ class AppWindow:
     def _append_trace_separator(self, title: str) -> None:
         self._append_trace_log(f"--- {title} ---")
 
+    def _set_status_message(self, message: str) -> None:
+        self._status_message = message
+        self.status_var.set(message)
+
+    def _compose_status_text(self, *, state_text: str, metrics_text: str) -> str:
+        return f"{self._status_message}\nState: {state_text} | {metrics_text}"
+
     def _detect_layer_speed_overrides(self, svg_path: str | Path) -> list[int]:
         try:
             root = ET.parse(str(svg_path)).getroot()
@@ -371,12 +383,12 @@ class AppWindow:
         self.state_var.set(f"State: {progress.state.value}")
         action_prefix = f"[{action}] " if action else ""
         if result.ok:
-            self.status_var.set(f"OK: {action_prefix}{result.message}")
+            self._set_status_message(f"OK: {action_prefix}{result.message}")
             self._set_status_style(ok=True)
         else:
-            self.status_var.set(f"ERROR: {action_prefix}{result.message}")
+            self._set_status_message(f"ERROR: {action_prefix}{result.message}")
             self._set_status_style(ok=False)
-        self._append_trace_log(self.status_var.get())
+        self._append_trace_log(self._status_message)
         self._refresh_view()
 
     def _refresh_view(self) -> None:
@@ -386,15 +398,18 @@ class AppWindow:
             elapsed = 0.0
             if self._loading_stage_started_at is not None:
                 elapsed = max(0.0, time.perf_counter() - self._loading_stage_started_at)
-            self.state_var.set(f"State: {stage} ({elapsed:.1f}s)")
+            state_text = f"{stage} ({elapsed:.1f}s)"
+            self.state_var.set(f"State: {state_text}")
         elif self._is_manual_action_running:
             action = self._manual_action_name or "manual"
             elapsed = 0.0
             if self._manual_action_started_at is not None:
                 elapsed = max(0.0, time.perf_counter() - self._manual_action_started_at)
-            self.state_var.set(f"State: moving [{action}] ({elapsed:.1f}s)")
+            state_text = f"moving [{action}] ({elapsed:.1f}s)"
+            self.state_var.set(f"State: {state_text}")
         else:
-            self.state_var.set(f"State: {progress.state.value}")
+            state_text = progress.state.value
+            self.state_var.set(f"State: {state_text}")
         self.svg_var.set(
             f"SVG: {self._last_loaded_svg if self._last_loaded_svg is not None else 'none'}"
         )
@@ -402,8 +417,10 @@ class AppWindow:
         estimated = format_duration(progress.estimated_seconds)
         elapsed = format_duration(progress.elapsed_seconds)
         dist = f"down {progress.distance_pen_down_mm:.1f} mm | total {progress.distance_total_mm:.1f} mm"
-        self.metrics_var.set(
-            f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | Lifts: {progress.pen_lifts}"
+        metrics_text = f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | Lifts: {progress.pen_lifts}"
+        self.metrics_var.set(metrics_text)
+        self.status_var.set(
+            self._compose_status_text(state_text=state_text, metrics_text=metrics_text)
         )
 
         completion = 0.0
@@ -415,7 +432,7 @@ class AppWindow:
                 completion, self._progress_text(progress, completion)
             )
 
-        has_svg = self._last_loaded_svg is not None
+        has_svg = self._last_reloadable_svg is not None
         is_loading = self._is_loading_svg
         is_manual = self._is_manual_action_running
         is_drawing = progress.state == PlotState.DRAWING
@@ -441,8 +458,20 @@ class AppWindow:
                 if (not is_drawing and not is_loading and not is_manual)
                 else "disabled"
             )
+        if self.trace_home_button is not None:
+            self.trace_home_button.configure(
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
+            )
         if self.center_button is not None:
             self.center_button.configure(
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
+            )
+        if self.trace_center_button is not None:
+            self.trace_center_button.configure(
                 state="normal"
                 if (not is_drawing and not is_loading and not is_manual)
                 else "disabled"
@@ -547,6 +576,28 @@ class AppWindow:
             active_tab = "Jog"
         self.tabs.set(active_tab)
 
+    def _restore_last_svg_file(self) -> None:
+        last_svg_file = self.settings_service.app_state.last_svg_file
+        if not last_svg_file:
+            return
+
+        svg_path = Path(last_svg_file)
+        if not svg_path.exists():
+            self.settings_service.app_state.last_svg_file = None
+            self.settings_service.save_app_state()
+            return
+
+        self._last_reloadable_svg = svg_path
+        self._set_status_message(
+            f"Ready: last SVG available for reload ({svg_path.name})"
+        )
+
+    def _remember_last_svg_file(self, svg_path: Path) -> None:
+        self._last_reloadable_svg = svg_path
+        self.settings_service.app_state.last_svg_file = str(svg_path)
+        self.settings_service.app_state.last_folder = str(svg_path.parent)
+        self.settings_service.save_app_state()
+
     def on_tab_change(self) -> None:
         if self.tabs is None:
             return
@@ -566,7 +617,7 @@ class AppWindow:
         self.driver.update_machine_settings(machine_model=machine.key)
         self._persist_machine_settings()
         self._sync_machine_controls()
-        self.status_var.set(f"OK: Machine model set to {machine.label}")
+        self._set_status_message(f"OK: Machine model set to {machine.label}")
         self._set_status_style(ok=True)
         self._append_trace_log(f"Machine model set to {machine.label}")
 
@@ -627,7 +678,7 @@ class AppWindow:
 
         existing_profiles = set(self.settings_service.list_profile_names())
         if profile_name in existing_profiles:
-            self.status_var.set(f"ERROR: Profile '{profile_name}' already exists")
+            self._set_status_message(f"ERROR: Profile '{profile_name}' already exists")
             self._set_status_style(ok=False)
             self._append_trace_log(f"Profile '{profile_name}' already exists")
             return
@@ -640,7 +691,7 @@ class AppWindow:
         self.driver.plot_profile = new_profile
         self._sync_profile_controls(new_profile)
         self._persist_current_profile()
-        self.status_var.set(f"OK: Created profile '{profile_name}'")
+        self._set_status_message(f"OK: Created profile '{profile_name}'")
         self._set_status_style(ok=True)
         self._append_trace_log(f"Created profile '{profile_name}'")
         self._refresh_view()
@@ -673,32 +724,37 @@ class AppWindow:
         self.preview_var.set(profile.preview)
 
     def on_load_svg(self) -> None:
-        filename = filedialog.askopenfilename(
-            defaultextension=".svg",
-            filetypes=(("SVG files", "*.svg"), ("All files", "*.*")),
-        )
+        dialog_kwargs = {
+            "defaultextension": ".svg",
+            "filetypes": (("SVG files", "*.svg"), ("All files", "*.*")),
+        }
+        if self.settings_service.app_state.last_folder:
+            dialog_kwargs["initialdir"] = self.settings_service.app_state.last_folder
+
+        filename = filedialog.askopenfilename(**dialog_kwargs)
         if not filename:
             return
-        self._last_loaded_svg = Path(filename)
+        self._remember_last_svg_file(Path(filename))
         self._load_svg_and_estimate(filename)
 
     def on_reload_svg(self) -> None:
-        if self._last_loaded_svg is None:
+        if self._last_reloadable_svg is None:
             return
-        self._load_svg_and_estimate(str(self._last_loaded_svg))
+        self._load_svg_and_estimate(str(self._last_reloadable_svg))
 
     def _load_svg_and_estimate(self, path: str) -> None:
         if self._is_loading_svg:
             self._append_trace_log("A load operation is already in progress.")
             return
 
+        self._last_loaded_svg = Path(path)
         svg_name = Path(path).name
         self._append_trace_separator(f"Load SVG: {svg_name}")
         self._is_loading_svg = True
         self._loading_stage = "loading"
         self._loading_started_at = time.perf_counter()
         self._loading_stage_started_at = self._loading_started_at
-        self.status_var.set(f"WORKING: [Load] {svg_name}")
+        self._set_status_message(f"WORKING: [Load] {svg_name}")
         self._set_status_working_style()
         self._refresh_view()
 
@@ -728,7 +784,7 @@ class AppWindow:
                 def switch_to_estimating() -> None:
                     self._loading_stage = "estimating"
                     self._loading_stage_started_at = time.perf_counter()
-                    self.status_var.set("WORKING: [Estimate] Running")
+                    self._set_status_message("WORKING: [Estimate] Running")
                     self._set_status_working_style()
                     self._refresh_view()
 
@@ -750,6 +806,10 @@ class AppWindow:
             self._loading_stage = None
             self._loading_started_at = None
             self._loading_stage_started_at = None
+
+            if load_result.ok:
+                self._remember_last_svg_file(Path(path))
+
             self._update_from_result(load_result, action="Load")
             self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")
 
@@ -812,7 +872,7 @@ class AppWindow:
                 return
 
             self._manual_action_stop_requested = True
-            self.status_var.set("WORKING: [Stop] Stopping manual action...")
+            self._set_status_message("WORKING: [Stop] Stopping manual action...")
             self._set_status_working_style()
             self._append_trace_log("STOP requested for manual action.")
             self._manual_action_stop_result = self.driver.stop_manual_action()
@@ -861,7 +921,7 @@ class AppWindow:
         self._manual_action_started_at = time.perf_counter()
         self._manual_action_stop_requested = False
         self._manual_action_stop_result = None
-        self.status_var.set(f"WORKING: [{action_name}] Running")
+        self._set_status_message(f"WORKING: [{action_name}] Running")
         self._set_status_working_style()
         self._refresh_view()
 
