@@ -20,6 +20,7 @@ from idraw_ui.backend.profiles import (
     machine_settings_from_mapping,
     plot_profile_from_mapping,
 )
+from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.backend.vendor_bridge import VendorBridge
 
 __all__ = [
@@ -34,6 +35,7 @@ __all__ = [
     "PlotProgress",
     "PlotState",
     "VendorBridge",
+    "SettingsService",
     "load_machine_settings",
     "load_plot_profile",
     "load_app_state",

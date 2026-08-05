@@ -11,13 +11,20 @@ import customtkinter as ctk
 
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.models import PlotState
+from idraw_ui.backend.settings_service import SettingsService
 
 
 class AppWindow:
     """Tabbed operational UI inspired by the previous my_axi_draw workflow."""
 
-    def __init__(self, driver: Driver) -> None:
+    def __init__(
+        self,
+        driver: Driver,
+        *,
+        settings_service: SettingsService | None = None,
+    ) -> None:
         self.driver = driver
+        self.settings_service = settings_service or SettingsService()
         self.title = "idraw_ui"
         ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
@@ -100,17 +107,38 @@ class AppWindow:
         header = ctk.CTkFrame(root_frame, corner_radius=12)
         header.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 8))
         header.grid_columnconfigure(0, weight=1)
+        header.grid_columnconfigure(1, weight=0)
 
+        left_header = ctk.CTkFrame(header, fg_color="transparent")
+        left_header.grid(row=0, column=0, sticky="w", padx=16, pady=(10, 6))
         ctk.CTkLabel(
-            header,
+            left_header,
             textvariable=self.profile_var,
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(10, 2))
+        ).pack(anchor="w")
         ctk.CTkLabel(
-            header,
+            left_header,
             textvariable=self.svg_var,
             font=ctk.CTkFont(size=12),
-        ).grid(row=1, column=0, sticky="w", padx=16, pady=(0, 10))
+        ).pack(anchor="w", pady=(2, 0))
+
+        controls_header = ctk.CTkFrame(header, fg_color="transparent")
+        controls_header.grid(row=0, column=1, sticky="e", padx=16, pady=(10, 6))
+
+        self.profile_selector = ctk.CTkOptionMenu(
+            controls_header,
+            values=self.settings_service.list_profile_names(),
+            command=self.on_profile_select,
+        )
+        self.profile_selector.pack(side="left")
+
+        self.new_profile_button = ctk.CTkButton(
+            controls_header,
+            text="New profile",
+            width=110,
+            command=self.on_create_profile,
+        )
+        self.new_profile_button.pack(side="left", padx=(8, 0))
 
         tabs = ctk.CTkTabview(root_frame, corner_radius=12)
         tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
@@ -684,7 +712,122 @@ class AppWindow:
 
     def _apply_plot_profile(self, **changes: object) -> None:
         self.driver.update_plot_profile(**changes)
+        self._persist_current_profile()
         self._refresh_view()
+
+    def _persist_current_profile(self) -> None:
+        profile = self.driver.plot_profile
+        self.settings_service.save_profile(profile)
+        self.settings_service.set_active_profile(profile.name)
+        if self.profile_selector is not None:
+            self.profile_selector.configure(
+                values=self.settings_service.list_profile_names()
+            )
+            self.profile_selector.set(profile.name)
+
+    def on_profile_select(self, profile_name: str) -> None:
+        profile = self.settings_service.load_profile(profile_name)
+        self.driver.update_plot_profile(**self._profile_to_changes(profile))
+        self.driver.plot_profile = profile
+        self._sync_profile_controls(profile)
+        self.settings_service.set_active_profile(profile_name)
+        self._refresh_view()
+
+    def on_create_profile(self) -> None:
+        current_name = self.driver.plot_profile.name or "default"
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title("New profile")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.geometry("320x140")
+
+        self.root.update_idletasks()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - 180
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - 90
+        dialog.geometry(f"+{x}+{y}")
+
+        ctk.CTkLabel(
+            dialog,
+            text="Profile name:",
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).pack(anchor="w", padx=18, pady=(14, 6))
+
+        entry = ctk.CTkEntry(dialog, width=260)
+        entry.pack(padx=18, pady=(0, 10))
+        suggested_name = f"{current_name}_copy"
+        entry.insert(0, suggested_name)
+
+        def focus_entry() -> None:
+            entry.focus_set()
+            entry.select_range(0, tk.END)
+
+        dialog.after(50, focus_entry)
+
+        result: str | None = None
+
+        def submit() -> None:
+            nonlocal result
+            result = entry.get().strip()
+            dialog.destroy()
+
+        entry.bind("<Return>", lambda _event: submit())
+        ctk.CTkButton(dialog, text="Create", command=submit, height=32).pack(
+            pady=(0, 10)
+        )
+        self.root.wait_window(dialog)
+
+        profile_name = result
+        if not profile_name:
+            return
+
+        existing_profiles = set(self.settings_service.list_profile_names())
+        if profile_name in existing_profiles:
+            self.status_var.set(f"ERROR: Profile '{profile_name}' already exists")
+            self._set_status_style(ok=False)
+            self._append_trace_log(f"Profile '{profile_name}' already exists")
+            return
+
+        new_profile = self.settings_service.create_profile(
+            profile_name,
+            source_profile=self.driver.plot_profile,
+        )
+        self.driver.update_plot_profile(**self._profile_to_changes(new_profile))
+        self.driver.plot_profile = new_profile
+        self._sync_profile_controls(new_profile)
+        self._persist_current_profile()
+        self.status_var.set(f"OK: Created profile '{profile_name}'")
+        self._set_status_style(ok=True)
+        self._append_trace_log(f"Created profile '{profile_name}'")
+        self._refresh_view()
+
+    def _profile_to_changes(self, profile) -> dict[str, object]:
+        return {
+            "name": profile.name,
+            "pen_up_height": profile.pen_up_height,
+            "pen_down_height": profile.pen_down_height,
+            "pen_move_speed": profile.pen_move_speed,
+            "speed_penup": profile.speed_penup,
+            "speed_pendown": profile.speed_pendown,
+            "accel": profile.accel,
+            "auto_rotate": profile.auto_rotate,
+            "reordering": profile.reordering,
+            "preview": profile.preview,
+            "digest": profile.digest,
+            "pen_up_command": profile.pen_up_command,
+            "pen_down_command": profile.pen_down_command,
+        }
+
+    def _sync_profile_controls(self, profile) -> None:
+        self.profile_var.set(f"Profile: {profile.name}")
+        self.pen_up_var.set(profile.pen_up_height)
+        self.pen_down_var.set(profile.pen_down_height)
+        self.speed_penup_var.set(profile.speed_penup)
+        self.speed_pendown_var.set(profile.speed_pendown)
+        self.accel_var.set(profile.accel)
+        self.reordering_var.set(self._reordering_label(profile.reordering))
+        self.auto_rotate_var.set(profile.auto_rotate)
+        self.preview_var.set(profile.preview)
+        self.digest_var.set(profile.digest)
 
     def on_load_svg(self) -> None:
         filename = filedialog.askopenfilename(
