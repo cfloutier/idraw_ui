@@ -92,6 +92,41 @@ The active profile and profile values are saved automatically as the user change
 - `settings/machine.yaml` stores machine configuration.
 - `profiles/*.yaml` stores individual plot profiles.
 
+### Advanced machine settings
+
+The main UI is intentionally centered on the machine model selection.
+Some lower-level serial settings still exist in `settings/machine.yaml`, but they
+are considered advanced settings and are expected to be edited manually when needed.
+
+Current advanced keys:
+
+- `port`
+- `baudrate`
+- `serial_timeout`
+- `digest`
+
+Recommended behavior:
+
+- Leave `port: null` to keep automatic machine selection enabled.
+- Only set a specific `port` when you explicitly want to force one device.
+- Keep `baudrate` and `serial_timeout` at their defaults unless you are debugging
+	or working around a specific hardware/firmware issue.
+- Keep `digest: 1` unless you explicitly need another runtime behavior:
+	- `0`: disabled
+	- `1`: normal plotting with digest/plob output support (recommended)
+	- `2`: digest-only processing (no plotting)
+
+Example:
+
+```yaml
+baudrate: 115200
+digest: 1
+machine_model: idraw-a1
+name: machine-default
+port: null
+serial_timeout: 1.0
+```
+
 ### Example profile keys
 
 Supported profile keys for the current plot profile include:
@@ -106,7 +141,6 @@ Supported profile keys for the current plot profile include:
 - `auto_rotate`
 - `reordering`
 - `preview`
-- `digest`
 - `pen_up_command`
 - `pen_down_command`
 

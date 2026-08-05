@@ -291,7 +291,8 @@ class Idraw2InternalRuntime:
 
         options.mode = mode
         options.preview = preview
-        options.digest = self.plot_profile.digest
+        digest = int(getattr(self.machine_settings, "digest", 1))
+        options.digest = max(0, min(2, digest))
         options.speed_pendown = self.plot_profile.speed_pendown
         options.speed_penup = self.plot_profile.speed_penup
         options.accel = self.plot_profile.accel

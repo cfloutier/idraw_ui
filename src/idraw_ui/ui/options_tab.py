@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import tkinter as tk
-
 import customtkinter as ctk
 
 
@@ -51,27 +49,3 @@ class OptionsTab:
             variable=self.window.preview_var,
             command=self.window.on_options_change,
         ).grid(row=3, column=0, sticky="w", padx=16, pady=6)
-
-        digest_row = ctk.CTkFrame(frame, fg_color="transparent")
-        digest_row.grid(row=4, column=0, sticky="w", padx=16, pady=(10, 6))
-        ctk.CTkLabel(digest_row, text="Digest level").grid(
-            row=0, column=0, padx=(0, 10)
-        )
-        digest_box = ctk.CTkComboBox(
-            digest_row,
-            values=["1", "2", "3"],
-            variable=tk.StringVar(value=str(self.window.digest_var.get())),
-            command=self.window.on_digest_change,
-            width=90,
-        )
-        digest_box.grid(row=0, column=1)
-
-        ctk.CTkLabel(
-            frame,
-            text=(
-                "These options mirror the plotting knobs from the previous tool: "
-                "ordering first, then orientation/preview behavior."
-            ),
-            justify="left",
-            wraplength=600,
-        ).grid(row=5, column=0, sticky="ew", padx=16, pady=(12, 14))

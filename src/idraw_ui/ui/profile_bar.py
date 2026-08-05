@@ -27,4 +27,4 @@ class ProfileBar:
             width=110,
             command=self.window.on_create_profile,
         )
-        self.window.new_profile_button.pack(side="left", padx=(8, 0))
+        self.window.new_profile_button.pack(side="left", padx=(4, 0))

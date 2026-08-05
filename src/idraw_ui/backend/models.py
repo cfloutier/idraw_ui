@@ -22,6 +22,7 @@ class MachineSettings:
     port: str | None = None
     baudrate: int = 115200
     serial_timeout: float = 1.0
+    digest: int = 1
 
 
 @dataclass

@@ -1,4 +1,5 @@
 baudrate: 115200
+digest: 1
 machine_model: idraw-a1
 name: machine-default
 port: null

@@ -22,11 +22,11 @@ class SvgInfoBar:
             self.parent,
             textvariable=self.window.state_var,
             font=ctk.CTkFont(size=12),
-        ).pack(anchor="w", pady=(2, 0))
+        ).pack(anchor="w", pady=(1, 0))
 
         ctk.CTkLabel(
             self.parent,
             textvariable=self.window.metrics_var,
             font=ctk.CTkFont(size=12),
             justify="left",
-        ).pack(anchor="w", pady=(2, 0))
+        ).pack(anchor="w", pady=(1, 0))

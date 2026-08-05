@@ -77,12 +77,14 @@ def test_app_state_persists_jog_distance(tmp_path: Path) -> None:
 def test_machine_settings_persist_selected_model(tmp_path: Path) -> None:
     service = SettingsService(root_dir=tmp_path)
 
-    machine_settings = MachineSettings(machine_model="idraw-a3")
+    machine_settings = MachineSettings(machine_model="idraw-a3", digest=2)
     service.save_machine_settings(machine_settings)
 
     reloaded = SettingsService(root_dir=tmp_path)
     assert reloaded.machine_settings.machine_model == "idraw-a3"
+    assert reloaded.machine_settings.digest == 2
 
     machine_path = tmp_path / "settings" / "machine.yaml"
     payload = yaml.safe_load(machine_path.read_text(encoding="utf-8"))
     assert payload["machine_model"] == "idraw-a3"
+    assert payload["digest"] == 2

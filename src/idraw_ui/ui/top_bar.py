@@ -16,14 +16,14 @@ class TopBar:
 
     def build(self) -> None:
         header = ctk.CTkFrame(self.parent, corner_radius=12)
-        header.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 8))
+        header.grid(row=0, column=0, sticky="ew", padx=4, pady=(4, 2))
         header.grid_columnconfigure(0, weight=1)
         header.grid_columnconfigure(1, weight=0)
 
         svg_info = ctk.CTkFrame(header, fg_color="transparent")
-        svg_info.grid(row=0, column=0, sticky="w", padx=16, pady=(10, 6))
+        svg_info.grid(row=0, column=0, sticky="w", padx=8, pady=(4, 2))
         SvgInfoBar(self.window, svg_info)
 
         profile_controls = ctk.CTkFrame(header, fg_color="transparent")
-        profile_controls.grid(row=0, column=1, sticky="e", padx=16, pady=(10, 6))
+        profile_controls.grid(row=0, column=1, sticky="e", padx=8, pady=(4, 2))
         ProfileBar(self.window, profile_controls)

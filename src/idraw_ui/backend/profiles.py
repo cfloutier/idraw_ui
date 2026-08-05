@@ -15,6 +15,7 @@ _MACHINE_SETTINGS_KEYS = {
     "port",
     "baudrate",
     "serial_timeout",
+    "digest",
 }
 
 _PLOT_PROFILE_KEYS = {

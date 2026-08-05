@@ -27,20 +27,24 @@ class SpeedTab:
         self.window._build_slider_block(
             frame,
             row=1,
-            label="Pen-up speed",
+            label="Travel speed (pen up)",
             variable=self.window.speed_penup_var,
             command=self.window.on_speed_change,
             from_=500.0,
             to=15000.0,
+            warning_threshold=10000.0,
+            warning_text="Warning: high travel speed",
         )
         self.window._build_slider_block(
             frame,
             row=2,
-            label="Pen-down speed",
+            label="Drawing speed (pen down)",
             variable=self.window.speed_pendown_var,
             command=self.window.on_speed_change,
             from_=200.0,
-            to=12000.0,
+            to=5000.0,
+            warning_threshold=4000.0,
+            warning_text="Warning: high drawing speed",
         )
         self.window._build_slider_block(
             frame,
@@ -55,8 +59,8 @@ class SpeedTab:
         ctk.CTkLabel(
             frame,
             text=(
-                "These values are written into the active plot profile. "
-                "They affect both preview/prepare and the runtime plotting configuration."
+                "Travel speed controls pen-up moves. Drawing speed controls pen-down moves. "
+                "These values are written into the active plot profile and used by the runtime."
             ),
             justify="left",
             wraplength=600,

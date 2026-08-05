@@ -11,13 +11,12 @@ import customtkinter as ctk
 
 from idraw_ui.backend.machine_models import get_machine_model, list_machine_models
 from idraw_ui.backend.driver import Driver, DriverCommandResult
-from idraw_ui.backend.models import PlotState
+from idraw_ui.backend.models import PlotProfile, PlotState
 from idraw_ui.backend.settings_service import SettingsService
+from idraw_ui.ui.draw_options_tab import DrawOptionsTab
 from idraw_ui.ui.jog_tab import JogTab
 from idraw_ui.ui.machine_tab import MachineTab
-from idraw_ui.ui.options_tab import OptionsTab
 from idraw_ui.ui.pen_tab import PenTab
-from idraw_ui.ui.speed_tab import SpeedTab
 from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
 from idraw_ui.ui.tools import format_duration, format_float
@@ -61,6 +60,7 @@ class AppWindow:
         self.trace_report_var = tk.StringVar(value="No SVG loaded.")
         self.pen_up_var = tk.DoubleVar(value=self.driver.plot_profile.pen_up_height)
         self.pen_down_var = tk.DoubleVar(value=self.driver.plot_profile.pen_down_height)
+        self.pen_apply_live_var = tk.BooleanVar(value=False)
         self.speed_penup_var = tk.DoubleVar(value=self.driver.plot_profile.speed_penup)
         self.speed_pendown_var = tk.DoubleVar(
             value=self.driver.plot_profile.speed_pendown
@@ -74,7 +74,6 @@ class AppWindow:
         )
         self.auto_rotate_var = tk.BooleanVar(value=self.driver.plot_profile.auto_rotate)
         self.preview_var = tk.BooleanVar(value=self.driver.plot_profile.preview)
-        self.digest_var = tk.IntVar(value=self.driver.plot_profile.digest)
 
         self.status_label: ctk.CTkLabel | None = None
         self.profile_selector: ctk.CTkOptionMenu | None = None
@@ -124,7 +123,7 @@ class AppWindow:
 
     def _build_layout(self) -> None:
         root_frame = ctk.CTkFrame(self.root, corner_radius=14)
-        root_frame.pack(fill=tk.BOTH, expand=True, padx=12, pady=12)
+        root_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         root_frame.grid_rowconfigure(1, weight=1)
         root_frame.grid_columnconfigure(0, weight=1)
 
@@ -135,19 +134,17 @@ class AppWindow:
             corner_radius=12,
             command=self.on_tab_change,
         )
-        self.tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        self.tabs.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 4))
         self.tabs.add("Trace")
         self.tabs.add("Jog")
         self.tabs.add("Pen")
-        self.tabs.add("Speed")
-        self.tabs.add("Options")
+        self.tabs.add("Draw Options")
         self.tabs.add("Machine")
 
         self._build_trace_tab(self.tabs.tab("Trace"))
         self._build_jog_tab(self.tabs.tab("Jog"))
         self._build_pen_tab(self.tabs.tab("Pen"))
-        self._build_speed_tab(self.tabs.tab("Speed"))
-        self._build_options_tab(self.tabs.tab("Options"))
+        self._build_draw_options_tab(self.tabs.tab("Draw Options"))
         self._build_machine_tab(self.tabs.tab("Machine"))
         self._restore_active_tab()
 
@@ -163,11 +160,8 @@ class AppWindow:
     def _build_pen_tab(self, tab: ctk.CTkFrame) -> None:
         PenTab(self, tab)
 
-    def _build_speed_tab(self, tab: ctk.CTkFrame) -> None:
-        SpeedTab(self, tab)
-
-    def _build_options_tab(self, tab: ctk.CTkFrame) -> None:
-        OptionsTab(self, tab)
+    def _build_draw_options_tab(self, tab: ctk.CTkFrame) -> None:
+        DrawOptionsTab(self, tab)
 
     def _build_slider_block(
         self,
@@ -179,27 +173,50 @@ class AppWindow:
         command,
         from_: float,
         to: float,
+        warning_threshold: float | None = None,
+        warning_text: str | None = None,
     ) -> None:
         block = ctk.CTkFrame(parent, fg_color="transparent")
-        block.grid(row=row, column=0, sticky="ew", padx=16, pady=8)
+        block.grid(row=row, column=0, sticky="ew", padx=8, pady=4)
         block.grid_columnconfigure(0, weight=1)
         value_var = tk.StringVar(value=format_float(variable.get()))
+        warning_var = tk.StringVar(value="")
+
+        value_label = ctk.CTkLabel(block, textvariable=value_var)
+
+        def update_warning_state(value: float) -> None:
+            if warning_threshold is not None and value > warning_threshold:
+                value_label.configure(text_color=("#B42318", "#FF6B6B"))
+                warning_var.set(warning_text or "Warning")
+            else:
+                value_label.configure(text_color=("#1F1F1F", "#F2F2F2"))
+                warning_var.set("")
 
         def on_slider(value: float) -> None:
             value_var.set(format_float(value))
+            update_warning_state(value)
             command(value)
 
         ctk.CTkLabel(block, text=label, font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, sticky="w"
         )
-        ctk.CTkLabel(block, textvariable=value_var).grid(row=0, column=1, sticky="e")
+        value_label.grid(row=0, column=1, sticky="e")
         ctk.CTkSlider(
             block,
             from_=from_,
             to=to,
             variable=variable,
             command=on_slider,
-        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+
+        ctk.CTkLabel(
+            block,
+            textvariable=warning_var,
+            text_color=("#B42318", "#FF6B6B"),
+            font=ctk.CTkFont(size=12, weight="bold"),
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(2, 0))
+
+        update_warning_state(variable.get())
 
     def _reordering_label(self, value: int) -> str:
         labels = {
@@ -321,14 +338,6 @@ class AppWindow:
                 if (has_svg and not is_drawing and not is_loading and not is_manual)
                 else "disabled"
             )
-        if self.connect_button is not None:
-            self.connect_button.configure(
-                state="normal" if (not is_loading and not is_manual) else "disabled"
-            )
-        if self.disconnect_button is not None:
-            self.disconnect_button.configure(
-                state="normal" if (not is_loading and not is_manual) else "disabled"
-            )
         if self.home_button is not None:
             self.home_button.configure(
                 state="normal"
@@ -433,8 +442,10 @@ class AppWindow:
         if self.tabs is None:
             return
 
-        allowed_tabs = {"Trace", "Jog", "Machine", "Pen", "Speed", "Options"}
+        allowed_tabs = {"Trace", "Jog", "Machine", "Pen", "Draw Options"}
         active_tab = self.settings_service.app_state.active_tab
+        if active_tab in {"Speed", "Options"}:
+            active_tab = "Draw Options"
         if active_tab not in allowed_tabs:
             active_tab = "Jog"
         self.tabs.set(active_tab)
@@ -487,10 +498,10 @@ class AppWindow:
             dialog,
             text="Profile name:",
             font=ctk.CTkFont(size=12, weight="bold"),
-        ).pack(anchor="w", padx=18, pady=(14, 6))
+        ).pack(anchor="w", padx=10, pady=(8, 4))
 
         entry = ctk.CTkEntry(dialog, width=260)
-        entry.pack(padx=18, pady=(0, 10))
+        entry.pack(padx=10, pady=(0, 6))
         suggested_name = f"{current_name}_copy"
         entry.insert(0, suggested_name)
 
@@ -509,7 +520,7 @@ class AppWindow:
 
         entry.bind("<Return>", lambda _event: submit())
         ctk.CTkButton(dialog, text="Create", command=submit, height=32).pack(
-            pady=(0, 10)
+            pady=(0, 6)
         )
         self.root.wait_window(dialog)
 
@@ -549,7 +560,6 @@ class AppWindow:
             "auto_rotate": profile.auto_rotate,
             "reordering": profile.reordering,
             "preview": profile.preview,
-            "digest": profile.digest,
             "pen_up_command": profile.pen_up_command,
             "pen_down_command": profile.pen_down_command,
         }
@@ -564,7 +574,6 @@ class AppWindow:
         self.reordering_var.set(self._reordering_label(profile.reordering))
         self.auto_rotate_var.set(profile.auto_rotate)
         self.preview_var.set(profile.preview)
-        self.digest_var.set(profile.digest)
 
     def on_load_svg(self) -> None:
         filename = filedialog.askopenfilename(
@@ -804,11 +813,31 @@ class AppWindow:
     def on_pen_down(self) -> None:
         self._update_from_result(self.driver.lower_pen())
 
+    def on_pen_reset_defaults(self) -> None:
+        defaults = PlotProfile()
+        self.pen_up_var.set(defaults.pen_up_height)
+        self.pen_down_var.set(defaults.pen_down_height)
+        self.on_pen_height_change(0.0)
+
+        if self.pen_apply_live_var.get():
+            self.on_pen_up()
+            self.on_pen_down()
+
     def on_pen_height_change(self, _value: float) -> None:
         self._apply_plot_profile(
             pen_up_height=float(self.pen_up_var.get()),
             pen_down_height=float(self.pen_down_var.get()),
         )
+
+    def on_pen_up_height_change(self, value: float) -> None:
+        self.on_pen_height_change(value)
+        if self.pen_apply_live_var.get():
+            self.on_pen_up()
+
+    def on_pen_down_height_change(self, value: float) -> None:
+        self.on_pen_height_change(value)
+        if self.pen_apply_live_var.get():
+            self.on_pen_down()
 
     def on_speed_change(self, _value: float) -> None:
         self._apply_plot_profile(
@@ -825,14 +854,6 @@ class AppWindow:
             auto_rotate=bool(self.auto_rotate_var.get()),
             preview=bool(self.preview_var.get()),
         )
-
-    def on_digest_change(self, value: str) -> None:
-        try:
-            digest = int(value)
-        except ValueError:
-            digest = 1
-        self.digest_var.set(digest)
-        self._apply_plot_profile(digest=digest)
 
     def show(self) -> None:
         self.root.mainloop()
