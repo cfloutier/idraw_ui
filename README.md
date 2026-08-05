@@ -76,26 +76,39 @@ the first operational machine controls:
 
 ## Profile-driven backend config
 
-Backend runtime settings can be loaded from a YAML profile file (for example
-`profiles/default.yaml`) through `Driver.from_profile_file(...)`.
+The UI now uses a persistent settings layer backed by YAML files.
+The active profile and profile values are saved automatically as the user changes them.
 
-Supported optional profile keys for serial behavior:
+### Current profile persistence behavior
 
-- `port` (example: `COM5`)
-- `baudrate` (default: `115200`)
-- `serial_timeout` (default: `1.0`)
-- `pen_up_command` (default: `M5`)
-- `pen_down_command` (default: `M3 S1000`)
+- The active profile is loaded from `settings/app_state.yaml` at startup.
+- Profile values are written to YAML files under `profiles/`.
+- Changing a plot option in the UI immediately updates the current profile and persists it.
+- A new profile can be created from the UI through the header action.
 
-Example:
+### Files involved
 
-```python
-from idraw_ui.backend.driver import Driver
+- `settings/app_state.yaml` stores the active profile and small app-state values.
+- `settings/machine.yaml` stores machine configuration.
+- `profiles/*.yaml` stores individual plot profiles.
 
-driver = Driver.from_profile_file("profiles/default.yaml")
-result = driver.connect()
-print(result.ok, result.message)
-```
+### Example profile keys
+
+Supported profile keys for the current plot profile include:
+
+- `name`
+- `pen_up_height`
+- `pen_down_height`
+- `pen_move_speed`
+- `speed_penup`
+- `speed_pendown`
+- `accel`
+- `auto_rotate`
+- `reordering`
+- `preview`
+- `digest`
+- `pen_up_command`
+- `pen_down_command`
 
 ## Development tooling
 

@@ -12,12 +12,17 @@ The following points are now implemented and validated on real tests:
   - Pen Up
   - Pen Down
   - Jog controls
+- Persistent profile management is now implemented.
+- Profile changes are saved immediately as the user edits them.
+- Creating a new profile from the UI is now supported.
 
 Additional behavior now in place:
 
 - Manual actions run with auto connect -> action -> auto disconnect.
 - Plot runtime can take control without requiring manual disconnect first.
 - Manual action stop is handled as best effort via disconnect.
+- The active profile is persisted through `settings/app_state.yaml`.
+- Profile files are stored under `profiles/` and reloaded on startup.
 
 ## Architecture choices kept for continuity
 
@@ -31,10 +36,11 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 ## Next plans (from current project direction)
 
-1. Profile management like legacy project behavior:
+1. Profile management refinements:
 
-- load profile
-- auto save profile updates
+- add rename/delete profile actions in the UI
+- add richer profile naming validation
+- expose machine settings in the same persistence flow
 
 2. Table calibration management:
 
