@@ -43,46 +43,8 @@ class TraceTab:
             row=2, column=0, sticky="ew", padx=12, pady=(18, 6)
         )
 
-        nav_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        nav_bar.grid(row=3, column=0, sticky="ew", padx=12, pady=6)
-        nav_bar.grid_columnconfigure((0, 1), weight=1)
-
-        self.window.home_button = ctk.CTkButton(
-            nav_bar, text="Home", command=self.window.on_home, height=40
-        )
-        self.window.home_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-
-        self.window.center_button = ctk.CTkButton(
-            nav_bar, text="Center", command=self.window.on_center, height=40
-        )
-        self.window.center_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
-
-        jog_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        jog_bar.grid(row=4, column=0, sticky="ew", padx=12, pady=6)
-        jog_bar.grid_columnconfigure((0, 1, 2, 3), weight=1)
-
-        self.window.jog_pos_x_button = ctk.CTkButton(
-            jog_bar, text="+10x", command=self.window.on_jog_pos_x, height=36
-        )
-        self.window.jog_pos_x_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-
-        self.window.jog_pos_y_button = ctk.CTkButton(
-            jog_bar, text="+10y", command=self.window.on_jog_pos_y, height=36
-        )
-        self.window.jog_pos_y_button.grid(row=0, column=1, sticky="ew", padx=2)
-
-        self.window.jog_neg_x_button = ctk.CTkButton(
-            jog_bar, text="-10x", command=self.window.on_jog_neg_x, height=36
-        )
-        self.window.jog_neg_x_button.grid(row=0, column=2, sticky="ew", padx=2)
-
-        self.window.jog_neg_y_button = ctk.CTkButton(
-            jog_bar, text="-10y", command=self.window.on_jog_neg_y, height=36
-        )
-        self.window.jog_neg_y_button.grid(row=0, column=3, sticky="ew", padx=(4, 0))
-
         run_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        run_bar.grid(row=5, column=0, sticky="ew", padx=12, pady=(18, 6))
+        run_bar.grid(row=3, column=0, sticky="ew", padx=12, pady=(18, 6))
         run_bar.grid_columnconfigure((0, 1, 2), weight=1)
 
         self.window.play_button = ctk.CTkButton(
@@ -114,7 +76,7 @@ class TraceTab:
             height=40,
         )
         self.window.disconnect_button.grid(
-            row=6, column=0, sticky="ew", padx=12, pady=(18, 12)
+            row=4, column=0, sticky="ew", padx=12, pady=(18, 12)
         )
 
         monitor = ctk.CTkFrame(self.tab, corner_radius=12)

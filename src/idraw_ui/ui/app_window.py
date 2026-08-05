@@ -12,11 +12,13 @@ import customtkinter as ctk
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.models import PlotState
 from idraw_ui.backend.settings_service import SettingsService
+from idraw_ui.ui.jog_tab import JogTab
 from idraw_ui.ui.options_tab import OptionsTab
 from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.speed_tab import SpeedTab
 from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
+from idraw_ui.ui.tools import format_duration, format_float
 
 
 class AppWindow:
@@ -115,18 +117,23 @@ class AppWindow:
         tabs = ctk.CTkTabview(root_frame, corner_radius=12)
         tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
         tabs.add("Trace")
+        tabs.add("Jog")
         tabs.add("Pen")
         tabs.add("Speed")
         tabs.add("Options")
         tabs.set("Trace")
 
         self._build_trace_tab(tabs.tab("Trace"))
+        self._build_jog_tab(tabs.tab("Jog"))
         self._build_pen_tab(tabs.tab("Pen"))
         self._build_speed_tab(tabs.tab("Speed"))
         self._build_options_tab(tabs.tab("Options"))
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
         TraceTab(self, tab)
+
+    def _build_jog_tab(self, tab: ctk.CTkFrame) -> None:
+        JogTab(self, tab)
 
     def _build_pen_tab(self, tab: ctk.CTkFrame) -> None:
         PenTab(self, tab)
@@ -151,10 +158,10 @@ class AppWindow:
         block = ctk.CTkFrame(parent, fg_color="transparent")
         block.grid(row=row, column=0, sticky="ew", padx=16, pady=8)
         block.grid_columnconfigure(0, weight=1)
-        value_var = tk.StringVar(value=self._format_float(variable.get()))
+        value_var = tk.StringVar(value=format_float(variable.get()))
 
         def on_slider(value: float) -> None:
-            value_var.set(self._format_float(value))
+            value_var.set(format_float(value))
             command(value)
 
         ctk.CTkLabel(block, text=label, font=ctk.CTkFont(weight="bold")).grid(
@@ -168,13 +175,6 @@ class AppWindow:
             variable=variable,
             command=on_slider,
         ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(6, 0))
-
-    def _format_float(self, value: float) -> str:
-        if value >= 100:
-            return f"{value:.0f}"
-        if value >= 10:
-            return f"{value:.1f}"
-        return f"{value:.2f}"
 
     def _reordering_label(self, value: int) -> str:
         labels = {
@@ -264,12 +264,8 @@ class AppWindow:
             f"SVG: {self._last_loaded_svg if self._last_loaded_svg is not None else 'none'}"
         )
 
-        estimated = (
-            f"{progress.estimated_seconds:.1f}s"
-            if progress.estimated_seconds is not None
-            else "-"
-        )
-        elapsed = f"{progress.elapsed_seconds:.1f}s"
+        estimated = format_duration(progress.estimated_seconds)
+        elapsed = format_duration(progress.elapsed_seconds)
         dist = f"down {progress.distance_pen_down_mm:.1f} mm | total {progress.distance_total_mm:.1f} mm"
         self.metrics_var.set(
             f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | Lifts: {progress.pen_lifts}"
