@@ -20,11 +20,22 @@ class DrawOptionsTab:
         speed_frame.grid(row=0, column=0, sticky="nsew", padx=(4, 2), pady=4)
         speed_frame.grid_columnconfigure(0, weight=1)
 
+        speed_header = ctk.CTkFrame(speed_frame, fg_color="transparent")
+        speed_header.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 4))
+        speed_header.grid_columnconfigure(0, weight=1)
+
         ctk.CTkLabel(
-            speed_frame,
+            speed_header,
             text="Speed Settings",
             font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=8, pady=(6, 4))
+        ).grid(row=0, column=0, sticky="w")
+
+        ctk.CTkButton(
+            speed_header,
+            text="Reset defaults",
+            command=self.window.on_speed_reset_defaults,
+            height=32,
+        ).grid(row=0, column=1, sticky="e")
 
         self.window._build_slider_block(
             speed_frame,

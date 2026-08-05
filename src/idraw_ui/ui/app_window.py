@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import threading
 import time
 import tkinter as tk
 from tkinter import filedialog
 from typing import Callable
+from xml.etree import ElementTree as ET
 
 import customtkinter as ctk
 
@@ -17,6 +19,7 @@ from idraw_ui.ui.draw_options_tab import DrawOptionsTab
 from idraw_ui.ui.jog_tab import JogTab
 from idraw_ui.ui.machine_tab import MachineTab
 from idraw_ui.ui.pen_tab import PenTab
+from idraw_ui.ui.progress_bar import ProgressBar
 from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
 from idraw_ui.ui.tools import format_duration, format_float
@@ -94,6 +97,7 @@ class AppWindow:
         self.connect_button: ctk.CTkButton | None = None
         self.disconnect_button: ctk.CTkButton | None = None
         self.trace_log: ctk.CTkTextbox | None = None
+        self.progress_bar: ProgressBar | None = None
 
         self._last_loaded_svg: Path | None = None
         self._is_loading_svg = False
@@ -125,6 +129,7 @@ class AppWindow:
         root_frame = ctk.CTkFrame(self.root, corner_radius=14)
         root_frame.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
         root_frame.grid_rowconfigure(1, weight=1)
+        root_frame.grid_rowconfigure(2, weight=0)
         root_frame.grid_columnconfigure(0, weight=1)
 
         TopBar(self, root_frame)
@@ -146,7 +151,71 @@ class AppWindow:
         self._build_pen_tab(self.tabs.tab("Pen"))
         self._build_draw_options_tab(self.tabs.tab("Draw Options"))
         self._build_machine_tab(self.tabs.tab("Machine"))
+        self._build_footer_status(root_frame)
         self._restore_active_tab()
+
+    def _build_footer_status(self, parent: ctk.CTkFrame) -> None:
+        footer = ctk.CTkFrame(parent, corner_radius=12)
+        footer.grid(row=2, column=0, sticky="ew", padx=4, pady=(0, 4))
+        footer.grid_columnconfigure(0, weight=1)
+
+        self.status_label = ctk.CTkLabel(
+            footer,
+            textvariable=self.status_var,
+            anchor="w",
+            corner_radius=8,
+            fg_color=("#E8ECF2", "#2A2D35"),
+            justify="left",
+            height=36,
+        )
+        self.status_label.grid(row=0, column=0, sticky="ew", padx=8, pady=(6, 4))
+
+        self.progress_bar = ProgressBar(
+            footer,
+            variable=self.progress_var,
+            height=28,
+            font_size=11,
+            text_color="white",
+        )
+        self.progress_bar.grid(row=1, column=0, sticky="ew", padx=8, pady=(0, 6))
+        self.progress_bar.set_with_text(0.0, "")
+
+    def _progress_text(self, progress, completion: float) -> str:
+        if self._is_loading_svg:
+            return "loading..."
+
+        percent = f"{completion * 100:2.1f}%"
+        elapsed_seconds = max(0.0, float(progress.elapsed_seconds))
+        elapsed_text = format_duration(elapsed_seconds)
+
+        if progress.estimated_seconds and progress.estimated_seconds > 0:
+            total_seconds = float(progress.estimated_seconds)
+            total_text = format_duration(total_seconds)
+            remaining_seconds = total_seconds - elapsed_seconds
+
+            if remaining_seconds >= 0:
+                remaining_text = format_duration(remaining_seconds)
+                return (
+                    f"{percent} - elapsed {elapsed_text} - "
+                    f"remaining {remaining_text} / {total_text}"
+                )
+
+            overtime_text = format_duration(-remaining_seconds)
+            return (
+                f"{percent} - elapsed {elapsed_text} - "
+                f"overtime +{overtime_text} / {total_text}"
+            )
+
+        if progress.state in {
+            PlotState.DRAWING,
+            PlotState.PAUSING,
+            PlotState.PAUSED,
+            PlotState.STOPPING,
+            PlotState.HOMING,
+        }:
+            return f"{percent} - elapsed {elapsed_text}"
+
+        return ""
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
         TraceTab(self, tab)
@@ -268,6 +337,30 @@ class AppWindow:
     def _append_trace_separator(self, title: str) -> None:
         self._append_trace_log(f"--- {title} ---")
 
+    def _detect_layer_speed_overrides(self, svg_path: str | Path) -> list[int]:
+        try:
+            root = ET.parse(str(svg_path)).getroot()
+        except Exception:
+            return []
+
+        labels: list[str] = []
+        for elem in root.iter():
+            if elem.tag.endswith("g"):
+                for key, value in elem.attrib.items():
+                    if key.endswith("}label") or key == "inkscape:label":
+                        labels.append(str(value))
+
+        speeds: set[int] = set()
+        for label in labels:
+            for match in re.finditer(r"\+s(\d{1,3})", label.lower()):
+                try:
+                    speed = int(match.group(1))
+                except ValueError:
+                    continue
+                if 1 <= speed <= 110:
+                    speeds.add(speed)
+        return sorted(speeds)
+
     def _update_from_result(
         self,
         result: DriverCommandResult,
@@ -317,6 +410,10 @@ class AppWindow:
         if progress.estimated_seconds and progress.estimated_seconds > 0:
             completion = min(progress.elapsed_seconds / progress.estimated_seconds, 1.0)
         self.progress_var.set(completion)
+        if self.progress_bar is not None:
+            self.progress_bar.set_with_text(
+                completion, self._progress_text(progress, completion)
+            )
 
         has_svg = self._last_loaded_svg is not None
         is_loading = self._is_loading_svg
@@ -618,10 +715,13 @@ class AppWindow:
         load_result: DriverCommandResult
         estimate_result: DriverCommandResult | None = None
         estimate_elapsed: float | None = None
+        estimate_value: float | None = None
+        layer_speed_overrides: list[int] = []
 
         try:
             load_result = self.driver.load_svg(path)
             load_elapsed = time.perf_counter() - load_started
+            layer_speed_overrides = self._detect_layer_speed_overrides(path)
 
             if load_result.ok:
 
@@ -636,6 +736,7 @@ class AppWindow:
                 estimate_started = time.perf_counter()
                 estimate_result = self.driver.estimate()
                 estimate_elapsed = time.perf_counter() - estimate_started
+                estimate_value = self.driver.get_progress().estimated_seconds
         except Exception as exc:
             load_elapsed = time.perf_counter() - load_started
             load_result = DriverCommandResult(
@@ -652,12 +753,27 @@ class AppWindow:
             self._update_from_result(load_result, action="Load")
             self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")
 
+            if layer_speed_overrides:
+                joined = ", ".join(str(v) for v in layer_speed_overrides)
+                self._append_trace_log(
+                    "Warning: layer speed overrides detected in SVG (+s): "
+                    f"{joined}. These can override global drawing speed."
+                )
+
             if estimate_result is not None:
                 self._update_from_result(estimate_result, action="Estimate")
                 if estimate_elapsed is not None:
                     self._append_trace_log(
                         f"Estimate duration: {estimate_elapsed:.2f}s"
                     )
+                estimate_txt = format_duration(estimate_value)
+                self._append_trace_log(
+                    "Estimate inputs: "
+                    f"speed_penup={self.driver.plot_profile.speed_penup:.0f}, "
+                    f"speed_pendown={self.driver.plot_profile.speed_pendown:.0f}, "
+                    f"accel={self.driver.plot_profile.accel:.1f} -> "
+                    f"estimated={estimate_txt}"
+                )
 
             self._refresh_view()
 
@@ -845,6 +961,13 @@ class AppWindow:
             speed_pendown=float(self.speed_pendown_var.get()),
             accel=float(self.accel_var.get()),
         )
+
+    def on_speed_reset_defaults(self) -> None:
+        defaults = PlotProfile()
+        self.speed_penup_var.set(defaults.speed_penup)
+        self.speed_pendown_var.set(defaults.speed_pendown)
+        self.accel_var.set(defaults.accel)
+        self.on_speed_change(0.0)
 
     def on_reordering_change(self, value: str) -> None:
         self._apply_plot_profile(reordering=self._reordering_value(value))
