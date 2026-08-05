@@ -4,8 +4,21 @@ from pathlib import Path
 
 import yaml
 
+from idraw_ui.backend.driver import Driver
 from idraw_ui.backend.models import PlotProfile
 from idraw_ui.backend.settings_service import SettingsService
+
+
+def test_driver_notifies_profile_change_listeners() -> None:
+    driver = Driver(plot_profile=PlotProfile(name="default", pen_up_height=1.0))
+    notified: list[PlotProfile] = []
+
+    driver.add_profile_change_listener(notified.append)
+    driver.update_plot_profile(name="updated", pen_up_height=2.5)
+
+    assert len(notified) == 1
+    assert notified[0].name == "updated"
+    assert notified[0].pen_up_height == 2.5
 
 
 def test_profile_persistence_and_active_profile(tmp_path: Path) -> None:

@@ -12,6 +12,10 @@ import customtkinter as ctk
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.models import PlotState
 from idraw_ui.backend.settings_service import SettingsService
+from idraw_ui.ui.options_tab import OptionsTab
+from idraw_ui.ui.pen_tab import PenTab
+from idraw_ui.ui.speed_tab import SpeedTab
+from idraw_ui.ui.trace_tab import TraceTab
 
 
 class AppWindow:
@@ -58,6 +62,8 @@ class AppWindow:
         self.digest_var = tk.IntVar(value=self.driver.plot_profile.digest)
 
         self.status_label: ctk.CTkLabel | None = None
+        self.profile_selector: ctk.CTkOptionMenu | None = None
+        self._profile_selector_var = tk.StringVar(value=self.driver.plot_profile.name)
         self.load_button: ctk.CTkButton | None = None
         self.reload_button: ctk.CTkButton | None = None
         self.play_button: ctk.CTkButton | None = None
@@ -86,6 +92,7 @@ class AppWindow:
         self._manual_action_stop_result: DriverCommandResult | None = None
         self._manual_action_worker: threading.Thread | None = None
 
+        self.driver.add_profile_change_listener(self._on_driver_profile_changed)
         self._build_layout()
         self._refresh_view()
         self.root.after(400, self._poll_progress)
@@ -127,10 +134,12 @@ class AppWindow:
 
         self.profile_selector = ctk.CTkOptionMenu(
             controls_header,
+            variable=self._profile_selector_var,
             values=self.settings_service.list_profile_names(),
             command=self.on_profile_select,
         )
         self.profile_selector.pack(side="left")
+        self._sync_profile_selector(self.driver.plot_profile.name)
 
         self.new_profile_button = ctk.CTkButton(
             controls_header,
@@ -154,331 +163,16 @@ class AppWindow:
         self._build_options_tab(tabs.tab("Options"))
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
-        tab.grid_columnconfigure(0, weight=0, minsize=280)
-        tab.grid_columnconfigure(1, weight=1, minsize=420)
-        tab.grid_rowconfigure(0, weight=1)
-
-        controls = ctk.CTkFrame(tab, corner_radius=12)
-        controls.configure(width=280)
-        controls.grid(row=0, column=0, sticky="nsew", padx=(8, 10), pady=8)
-        controls.grid_propagate(False)
-        controls.grid_columnconfigure(0, weight=1)
-
-        self.load_button = ctk.CTkButton(
-            controls, text="Load SVG", command=self.on_load_svg, height=40
-        )
-        self.load_button.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 6))
-
-        self.reload_button = ctk.CTkButton(
-            controls, text="Reload", command=self.on_reload_svg, height=40
-        )
-        self.reload_button.grid(row=1, column=0, sticky="ew", padx=12, pady=6)
-
-        self.connect_button = ctk.CTkButton(
-            controls, text="Connect", command=self.on_connect, height=40
-        )
-        self.connect_button.grid(row=2, column=0, sticky="ew", padx=12, pady=(18, 6))
-
-        nav_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        nav_bar.grid(row=3, column=0, sticky="ew", padx=12, pady=6)
-        nav_bar.grid_columnconfigure((0, 1), weight=1)
-
-        self.home_button = ctk.CTkButton(
-            nav_bar, text="Home", command=self.on_home, height=40
-        )
-        self.home_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-
-        self.center_button = ctk.CTkButton(
-            nav_bar, text="Center", command=self.on_center, height=40
-        )
-        self.center_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
-
-        jog_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        jog_bar.grid(row=4, column=0, sticky="ew", padx=12, pady=6)
-        jog_bar.grid_columnconfigure((0, 1, 2, 3), weight=1)
-
-        self.jog_pos_x_button = ctk.CTkButton(
-            jog_bar, text="+10x", command=self.on_jog_pos_x, height=36
-        )
-        self.jog_pos_x_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
-
-        self.jog_pos_y_button = ctk.CTkButton(
-            jog_bar, text="+10y", command=self.on_jog_pos_y, height=36
-        )
-        self.jog_pos_y_button.grid(row=0, column=1, sticky="ew", padx=2)
-
-        self.jog_neg_x_button = ctk.CTkButton(
-            jog_bar, text="-10x", command=self.on_jog_neg_x, height=36
-        )
-        self.jog_neg_x_button.grid(row=0, column=2, sticky="ew", padx=2)
-
-        self.jog_neg_y_button = ctk.CTkButton(
-            jog_bar, text="-10y", command=self.on_jog_neg_y, height=36
-        )
-        self.jog_neg_y_button.grid(row=0, column=3, sticky="ew", padx=(4, 0))
-
-        run_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        run_bar.grid(row=5, column=0, sticky="ew", padx=12, pady=(18, 6))
-        run_bar.grid_columnconfigure((0, 1, 2), weight=1)
-
-        self.play_button = ctk.CTkButton(
-            run_bar, text="Play", command=self.on_play_pause_resume, height=52
-        )
-        self.play_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
-
-        self.pause_button = ctk.CTkButton(
-            run_bar, text="Pause", command=self.on_pause, height=52
-        )
-        self.pause_button.grid(row=0, column=1, sticky="ew", padx=3)
-
-        self.stop_button = ctk.CTkButton(
-            run_bar,
-            text="Stop",
-            command=self.on_stop,
-            fg_color="#B23A48",
-            hover_color="#9A2F3D",
-            height=52,
-        )
-        self.stop_button.grid(row=0, column=2, sticky="ew", padx=(6, 0))
-
-        self.disconnect_button = ctk.CTkButton(
-            controls,
-            text="Disconnect",
-            command=self.on_disconnect,
-            fg_color="#4C5B73",
-            hover_color="#3E4A5D",
-            height=40,
-        )
-        self.disconnect_button.grid(
-            row=6, column=0, sticky="ew", padx=12, pady=(18, 12)
-        )
-
-        monitor = ctk.CTkFrame(tab, corner_radius=12)
-        monitor.grid(row=0, column=1, sticky="nsew", padx=(0, 8), pady=8)
-        monitor.grid_rowconfigure(3, weight=3)
-        monitor.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            monitor,
-            textvariable=self.state_var,
-            font=ctk.CTkFont(size=14, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(12, 4))
-
-        self.status_label = ctk.CTkLabel(
-            monitor,
-            textvariable=self.status_var,
-            anchor="w",
-            corner_radius=8,
-            fg_color=("#E8ECF2", "#2A2D35"),
-            justify="left",
-            height=38,
-        )
-        self.status_label.grid(row=1, column=0, sticky="ew", padx=14, pady=(0, 8))
-
-        ctk.CTkLabel(
-            monitor,
-            textvariable=self.metrics_var,
-            anchor="w",
-            justify="left",
-            wraplength=700,
-            font=ctk.CTkFont(size=12),
-        ).grid(row=2, column=0, sticky="ew", padx=14, pady=(0, 8))
-
-        progress_frame = ctk.CTkFrame(monitor, fg_color="transparent")
-        progress_frame.grid(row=3, column=0, sticky="nsew", padx=14, pady=(0, 12))
-        progress_frame.grid_rowconfigure(1, weight=1)
-        progress_frame.grid_columnconfigure(0, weight=1)
-
-        progress = ctk.CTkProgressBar(progress_frame, variable=self.progress_var)
-        progress.grid(row=0, column=0, sticky="ew", pady=(0, 8))
-        progress.set(0)
-
-        self.trace_log = ctk.CTkTextbox(progress_frame, wrap="word", height=300)
-        self.trace_log.grid(row=1, column=0, sticky="nsew")
-        self.trace_log.insert("1.0", self.trace_report_var.get())
-        self.trace_log.configure(state="disabled")
+        TraceTab(self, tab)
 
     def _build_pen_tab(self, tab: ctk.CTkFrame) -> None:
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_columnconfigure(1, weight=0)
-
-        settings = ctk.CTkFrame(tab, corner_radius=12)
-        settings.grid(row=0, column=0, sticky="nsew", padx=(8, 10), pady=8)
-        settings.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            settings,
-            text="Pen Height Settings",
-            font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
-
-        self._build_slider_block(
-            settings,
-            row=1,
-            label="Pen up height",
-            variable=self.pen_up_var,
-            command=self.on_pen_height_change,
-            from_=0.0,
-            to=10.0,
-        )
-        self._build_slider_block(
-            settings,
-            row=2,
-            label="Pen down height",
-            variable=self.pen_down_var,
-            command=self.on_pen_height_change,
-            from_=0.0,
-            to=10.0,
-        )
-
-        info = ctk.CTkLabel(
-            settings,
-            text=(
-                "Adjust the two pen heights live in the current profile. "
-                "Use the test buttons on the right to physically validate the stroke gap."
-            ),
-            justify="left",
-            wraplength=520,
-        )
-        info.grid(row=3, column=0, sticky="ew", padx=16, pady=(10, 14))
-
-        tester = ctk.CTkFrame(tab, corner_radius=12)
-        tester.grid(row=0, column=1, sticky="ns", padx=(0, 8), pady=8)
-        tester.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            tester,
-            text="Pen Test",
-            font=ctk.CTkFont(size=16, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=14, pady=(14, 8))
-
-        ctk.CTkButton(tester, text="Pen Up", command=self.on_pen_up, height=42).grid(
-            row=1, column=0, sticky="ew", padx=14, pady=6
-        )
-        ctk.CTkButton(
-            tester, text="Pen Down", command=self.on_pen_down, height=42
-        ).grid(row=2, column=0, sticky="ew", padx=14, pady=6)
-        ctk.CTkButton(
-            tester,
-            text="Connect",
-            command=self.on_connect,
-            fg_color="#4C5B73",
-            hover_color="#3E4A5D",
-            height=40,
-        ).grid(row=3, column=0, sticky="ew", padx=14, pady=(18, 14))
+        PenTab(self, tab)
 
     def _build_speed_tab(self, tab: ctk.CTkFrame) -> None:
-        tab.grid_columnconfigure(0, weight=1)
-        frame = ctk.CTkFrame(tab, corner_radius=12)
-        frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
-        frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            frame,
-            text="Speed Settings",
-            font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
-
-        self._build_slider_block(
-            frame,
-            row=1,
-            label="Pen-up speed",
-            variable=self.speed_penup_var,
-            command=self.on_speed_change,
-            from_=500.0,
-            to=15000.0,
-        )
-        self._build_slider_block(
-            frame,
-            row=2,
-            label="Pen-down speed",
-            variable=self.speed_pendown_var,
-            command=self.on_speed_change,
-            from_=200.0,
-            to=12000.0,
-        )
-        self._build_slider_block(
-            frame,
-            row=3,
-            label="Acceleration",
-            variable=self.accel_var,
-            command=self.on_speed_change,
-            from_=1.0,
-            to=110.0,
-        )
-
-        ctk.CTkLabel(
-            frame,
-            text=(
-                "These values are written into the active plot profile. "
-                "They affect both preview/prepare and the runtime plotting configuration."
-            ),
-            justify="left",
-            wraplength=600,
-        ).grid(row=4, column=0, sticky="ew", padx=16, pady=(10, 14))
+        SpeedTab(self, tab)
 
     def _build_options_tab(self, tab: ctk.CTkFrame) -> None:
-        tab.grid_columnconfigure(0, weight=1)
-        frame = ctk.CTkFrame(tab, corner_radius=12)
-        frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
-        frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            frame,
-            text="Plot Options",
-            font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 10))
-
-        ordering = ctk.CTkOptionMenu(
-            frame,
-            values=[
-                self._reordering_label(0),
-                self._reordering_label(1),
-                self._reordering_label(2),
-                self._reordering_label(4),
-            ],
-            variable=self.reordering_var,
-            command=self.on_reordering_change,
-        )
-        ordering.grid(row=1, column=0, sticky="w", padx=16, pady=6)
-
-        ctk.CTkSwitch(
-            frame,
-            text="Auto rotate to fit the page",
-            variable=self.auto_rotate_var,
-            command=self.on_options_change,
-        ).grid(row=2, column=0, sticky="w", padx=16, pady=6)
-
-        ctk.CTkSwitch(
-            frame,
-            text="Preview mode by default",
-            variable=self.preview_var,
-            command=self.on_options_change,
-        ).grid(row=3, column=0, sticky="w", padx=16, pady=6)
-
-        digest_row = ctk.CTkFrame(frame, fg_color="transparent")
-        digest_row.grid(row=4, column=0, sticky="w", padx=16, pady=(10, 6))
-        ctk.CTkLabel(digest_row, text="Digest level").grid(
-            row=0, column=0, padx=(0, 10)
-        )
-        digest_box = ctk.CTkComboBox(
-            digest_row,
-            values=["1", "2", "3"],
-            variable=tk.StringVar(value=str(self.digest_var.get())),
-            command=self.on_digest_change,
-            width=90,
-        )
-        digest_box.grid(row=0, column=1)
-
-        ctk.CTkLabel(
-            frame,
-            text=(
-                "These options mirror the plotting knobs from the previous tool: "
-                "ordering first, then orientation/preview behavior."
-            ),
-            justify="left",
-            wraplength=600,
-        ).grid(row=5, column=0, sticky="ew", padx=16, pady=(12, 14))
+        OptionsTab(self, tab)
 
     def _build_slider_block(
         self,
@@ -715,15 +409,34 @@ class AppWindow:
         self._persist_current_profile()
         self._refresh_view()
 
+    def _on_driver_profile_changed(self, profile) -> None:
+        self._sync_profile_controls(profile)
+        self._refresh_view()
+
+    def _sync_profile_selector(self, profile_name: str | None = None) -> None:
+        if self.profile_selector is None:
+            return
+
+        profile_names = self.settings_service.list_profile_names()
+        self.profile_selector.configure(values=profile_names)
+
+        name = profile_name or self.driver.plot_profile.name
+        if name in profile_names:
+            self._profile_selector_var.set(name)
+            self.profile_selector.set(name)
+        elif profile_names:
+            fallback = profile_names[0]
+            self._profile_selector_var.set(fallback)
+            self.profile_selector.set(fallback)
+        else:
+            self._profile_selector_var.set("")
+            self.profile_selector.set("")
+
     def _persist_current_profile(self) -> None:
         profile = self.driver.plot_profile
         self.settings_service.save_profile(profile)
         self.settings_service.set_active_profile(profile.name)
-        if self.profile_selector is not None:
-            self.profile_selector.configure(
-                values=self.settings_service.list_profile_names()
-            )
-            self.profile_selector.set(profile.name)
+        self._sync_profile_selector(profile.name)
 
     def on_profile_select(self, profile_name: str) -> None:
         profile = self.settings_service.load_profile(profile_name)
@@ -819,6 +532,7 @@ class AppWindow:
 
     def _sync_profile_controls(self, profile) -> None:
         self.profile_var.set(f"Profile: {profile.name}")
+        self._sync_profile_selector(profile.name)
         self.pen_up_var.set(profile.pen_up_height)
         self.pen_down_var.set(profile.pen_down_height)
         self.speed_penup_var.set(profile.speed_penup)

@@ -35,6 +35,7 @@ class Driver:
         self.machine_settings = machine_settings or MachineSettings()
         self.plot_profile = plot_profile or PlotProfile()
         self.progress = PlotProgress()
+        self._profile_change_listeners: list[Callable[[PlotProfile], None]] = []
         self.plot_facade = plot_facade or Idraw2Facade(
             machine_settings=self.machine_settings,
             plot_profile=self.plot_profile,
@@ -158,6 +159,15 @@ class Driver:
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
+    def add_profile_change_listener(
+        self, listener: Callable[[PlotProfile], None]
+    ) -> None:
+        self._profile_change_listeners.append(listener)
+
+    def _notify_profile_change_listeners(self) -> None:
+        for listener in list(self._profile_change_listeners):
+            listener(self.plot_profile)
+
     def update_plot_profile(self, **changes: object) -> None:
         self.plot_profile = replace(self.plot_profile, **changes)
         self.bridge.pen_up_command = self.plot_profile.pen_up_command
@@ -173,6 +183,7 @@ class Driver:
             machine_settings=self.machine_settings,
             plot_profile=self.plot_profile,
         )
+        self._notify_profile_change_listeners()
 
     def update_machine_settings(self, **changes: object) -> None:
         self.machine_settings = replace(self.machine_settings, **changes)
