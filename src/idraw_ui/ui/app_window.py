@@ -54,6 +54,9 @@ class AppWindow:
             value=self.driver.plot_profile.speed_pendown
         )
         self.accel_var = tk.DoubleVar(value=self.driver.plot_profile.accel)
+        self.jog_distance_var = tk.DoubleVar(
+            value=self.settings_service.app_state.jog_distance_mm
+        )
         self.reordering_var = tk.StringVar(
             value=self._reordering_label(self.driver.plot_profile.reordering)
         )
@@ -65,6 +68,7 @@ class AppWindow:
         self.profile_selector: ctk.CTkOptionMenu | None = None
         self._profile_selector_var = tk.StringVar(value=self.driver.plot_profile.name)
         self.new_profile_button: ctk.CTkButton | None = None
+        self.tabs: ctk.CTkTabview | None = None
         self.load_button: ctk.CTkButton | None = None
         self.reload_button: ctk.CTkButton | None = None
         self.play_button: ctk.CTkButton | None = None
@@ -114,20 +118,24 @@ class AppWindow:
 
         TopBar(self, root_frame)
 
-        tabs = ctk.CTkTabview(root_frame, corner_radius=12)
-        tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
-        tabs.add("Trace")
-        tabs.add("Jog")
-        tabs.add("Pen")
-        tabs.add("Speed")
-        tabs.add("Options")
-        tabs.set("Trace")
+        self.tabs = ctk.CTkTabview(
+            root_frame,
+            corner_radius=12,
+            command=self.on_tab_change,
+        )
+        self.tabs.grid(row=1, column=0, sticky="nsew", padx=12, pady=(0, 12))
+        self.tabs.add("Trace")
+        self.tabs.add("Jog")
+        self.tabs.add("Pen")
+        self.tabs.add("Speed")
+        self.tabs.add("Options")
 
-        self._build_trace_tab(tabs.tab("Trace"))
-        self._build_jog_tab(tabs.tab("Jog"))
-        self._build_pen_tab(tabs.tab("Pen"))
-        self._build_speed_tab(tabs.tab("Speed"))
-        self._build_options_tab(tabs.tab("Options"))
+        self._build_trace_tab(self.tabs.tab("Trace"))
+        self._build_jog_tab(self.tabs.tab("Jog"))
+        self._build_pen_tab(self.tabs.tab("Pen"))
+        self._build_speed_tab(self.tabs.tab("Speed"))
+        self._build_options_tab(self.tabs.tab("Options"))
+        self._restore_active_tab()
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
         TraceTab(self, tab)
@@ -395,6 +403,27 @@ class AppWindow:
         self.settings_service.save_profile(profile)
         self.settings_service.set_active_profile(profile.name)
         self._sync_profile_selector(profile.name)
+
+    def _restore_active_tab(self) -> None:
+        if self.tabs is None:
+            return
+
+        allowed_tabs = {"Trace", "Jog", "Pen", "Speed", "Options"}
+        active_tab = self.settings_service.app_state.active_tab
+        if active_tab not in allowed_tabs:
+            active_tab = "Jog"
+        self.tabs.set(active_tab)
+
+    def on_tab_change(self) -> None:
+        if self.tabs is None:
+            return
+
+        self.settings_service.app_state.active_tab = self.tabs.get()
+        self.settings_service.save_app_state()
+
+    def on_jog_distance_change(self, value: float) -> None:
+        self.settings_service.app_state.jog_distance_mm = float(value)
+        self.settings_service.save_app_state()
 
     def on_profile_select(self, profile_name: str) -> None:
         profile = self.settings_service.load_profile(profile_name)
@@ -717,16 +746,20 @@ class AppWindow:
             return
 
     def on_jog_pos_x(self) -> None:
-        self._jog(10.0, 0.0, "+10x")
+        distance = float(self.jog_distance_var.get())
+        self._jog(distance, 0.0, f"+X {format_float(distance)} mm")
 
     def on_jog_pos_y(self) -> None:
-        self._jog(0.0, 10.0, "+10y")
+        distance = float(self.jog_distance_var.get())
+        self._jog(0.0, distance, f"+Y {format_float(distance)} mm")
 
     def on_jog_neg_x(self) -> None:
-        self._jog(-10.0, 0.0, "-10x")
+        distance = float(self.jog_distance_var.get())
+        self._jog(-distance, 0.0, f"-X {format_float(distance)} mm")
 
     def on_jog_neg_y(self) -> None:
-        self._jog(0.0, -10.0, "-10y")
+        distance = float(self.jog_distance_var.get())
+        self._jog(0.0, -distance, f"-Y {format_float(distance)} mm")
 
     def on_pen_up(self) -> None:
         self._update_from_result(self.driver.raise_pen())

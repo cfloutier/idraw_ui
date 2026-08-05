@@ -1,3 +1,5 @@
 active_profile: default
+active_tab: Jog
+jog_distance_mm: 10.0
 last_folder: null
 last_svg_file: null

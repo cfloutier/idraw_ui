@@ -44,6 +44,8 @@ class PlotProfile:
 @dataclass
 class AppState:
     active_profile: str = "default"
+    active_tab: str = "Jog"
+    jog_distance_mm: float = 10.0
     last_svg_file: str | None = None
     last_folder: str | None = None
 

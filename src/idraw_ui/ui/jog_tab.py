@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import tkinter as tk
+
 import customtkinter as ctk
+
+from idraw_ui.ui.tools import format_distance_mm
 
 
 class JogTab:
@@ -13,58 +17,86 @@ class JogTab:
 
     def build(self) -> None:
         self.tab.grid_columnconfigure(0, weight=1)
+        self.tab.grid_rowconfigure(0, weight=1)
 
         frame = ctk.CTkFrame(self.tab, corner_radius=12)
         frame.grid(row=0, column=0, sticky="nsew", padx=8, pady=8)
         frame.grid_columnconfigure(0, weight=1)
 
-        ctk.CTkLabel(
-            frame,
-            text="Jog Controls",
-            font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
-
         nav_bar = ctk.CTkFrame(frame, fg_color="transparent")
-        nav_bar.grid(row=1, column=0, sticky="ew", padx=16, pady=(4, 10))
+        nav_bar.grid(row=0, column=0, sticky="ew", padx=48, pady=(28, 20))
         nav_bar.grid_columnconfigure((0, 1), weight=1)
 
         self.window.home_button = ctk.CTkButton(
-            nav_bar, text="Home", command=self.window.on_home, height=42
+            nav_bar, text="Home", command=self.window.on_home, height=64
         )
-        self.window.home_button.grid(row=0, column=0, sticky="ew", padx=(0, 6))
+        self.window.home_button.grid(row=0, column=0, sticky="ew", padx=(0, 10))
 
         self.window.center_button = ctk.CTkButton(
-            nav_bar, text="Center", command=self.window.on_center, height=42
+            nav_bar, text="Center", command=self.window.on_center, height=64
         )
-        self.window.center_button.grid(row=0, column=1, sticky="ew", padx=(6, 0))
+        self.window.center_button.grid(row=0, column=1, sticky="ew", padx=(10, 0))
 
-        jog_bar = ctk.CTkFrame(frame, fg_color="transparent")
-        jog_bar.grid(row=2, column=0, sticky="ew", padx=16, pady=(4, 10))
-        jog_bar.grid_columnconfigure((0, 1, 2, 3), weight=1)
-
-        self.window.jog_pos_x_button = ctk.CTkButton(
-            jog_bar, text="+10x", command=self.window.on_jog_pos_x, height=38
-        )
-        self.window.jog_pos_x_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+        jog_pad = ctk.CTkFrame(frame, fg_color="transparent")
+        jog_pad.grid(row=1, column=0, padx=56, pady=(0, 24), sticky="nw")
+        jog_pad.grid_columnconfigure((0, 1, 2), weight=0, minsize=84)
+        jog_pad.grid_rowconfigure((0, 1, 2), weight=0, minsize=64)
 
         self.window.jog_pos_y_button = ctk.CTkButton(
-            jog_bar, text="+10y", command=self.window.on_jog_pos_y, height=38
+            jog_pad, text="+Y", command=self.window.on_jog_pos_y, width=80, height=64
         )
-        self.window.jog_pos_y_button.grid(row=0, column=1, sticky="ew", padx=2)
+        self.window.jog_pos_y_button.grid(row=0, column=1, padx=6, pady=6)
 
         self.window.jog_neg_x_button = ctk.CTkButton(
-            jog_bar, text="-10x", command=self.window.on_jog_neg_x, height=38
+            jog_pad, text="-X", command=self.window.on_jog_neg_x, width=80, height=64
         )
-        self.window.jog_neg_x_button.grid(row=0, column=2, sticky="ew", padx=2)
+        self.window.jog_neg_x_button.grid(row=1, column=0, padx=6, pady=6)
+
+        self.window.jog_pos_x_button = ctk.CTkButton(
+            jog_pad, text="+X", command=self.window.on_jog_pos_x, width=80, height=64
+        )
+        self.window.jog_pos_x_button.grid(row=1, column=2, padx=6, pady=6)
 
         self.window.jog_neg_y_button = ctk.CTkButton(
-            jog_bar, text="-10y", command=self.window.on_jog_neg_y, height=38
+            jog_pad, text="-Y", command=self.window.on_jog_neg_y, width=80, height=64
         )
-        self.window.jog_neg_y_button.grid(row=0, column=3, sticky="ew", padx=(4, 0))
+        self.window.jog_neg_y_button.grid(row=2, column=1, padx=6, pady=6)
+
+        slider_row = ctk.CTkFrame(frame, fg_color="transparent")
+        slider_row.grid(row=2, column=0, sticky="ew", padx=48, pady=(0, 24))
+        slider_row.grid_columnconfigure(0, weight=1)
+        slider_row.grid_columnconfigure(1, weight=0)
+
+        value_var = tk.StringVar(
+            value=f"Jog distance: {format_distance_mm(self.window.jog_distance_var.get())}"
+        )
+
+        def on_distance_change(value: float) -> None:
+            value_var.set(f"Jog distance: {format_distance_mm(value)}")
+            self.window.on_jog_distance_change(value)
+
+        def reset_to_one_cm() -> None:
+            self.window.jog_distance_var.set(10.0)
+            on_distance_change(10.0)
 
         ctk.CTkLabel(
-            frame,
-            text="Use these controls for manual moves outside a running plot.",
-            justify="left",
-            wraplength=620,
-        ).grid(row=3, column=0, sticky="ew", padx=16, pady=(8, 14))
+            slider_row,
+            textvariable=value_var,
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, sticky="w", pady=(0, 8))
+
+        ctk.CTkSlider(
+            slider_row,
+            from_=1.0,
+            to=50.0,
+            variable=self.window.jog_distance_var,
+            command=on_distance_change,
+            number_of_steps=49,
+        ).grid(row=1, column=0, sticky="ew", padx=(0, 10))
+
+        ctk.CTkButton(
+            slider_row,
+            text="1 cm",
+            width=80,
+            command=reset_to_one_cm,
+        ).grid(row=1, column=1, sticky="e")

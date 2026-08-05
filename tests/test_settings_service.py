@@ -44,3 +44,31 @@ def test_profile_persistence_and_active_profile(tmp_path: Path) -> None:
     assert state_path.exists()
     payload = yaml.safe_load(state_path.read_text(encoding="utf-8"))
     assert payload["active_profile"] == "test_profile"
+
+
+def test_app_state_persists_active_tab(tmp_path: Path) -> None:
+    service = SettingsService(root_dir=tmp_path)
+
+    service.app_state.active_tab = "Jog"
+    service.save_app_state()
+
+    reloaded = SettingsService(root_dir=tmp_path)
+    assert reloaded.app_state.active_tab == "Jog"
+
+    state_path = tmp_path / "settings" / "app_state.yaml"
+    payload = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+    assert payload["active_tab"] == "Jog"
+
+
+def test_app_state_persists_jog_distance(tmp_path: Path) -> None:
+    service = SettingsService(root_dir=tmp_path)
+
+    service.app_state.jog_distance_mm = 37.0
+    service.save_app_state()
+
+    reloaded = SettingsService(root_dir=tmp_path)
+    assert reloaded.app_state.jog_distance_mm == 37.0
+
+    state_path = tmp_path / "settings" / "app_state.yaml"
+    payload = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+    assert payload["jog_distance_mm"] == 37.0

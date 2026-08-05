@@ -25,3 +25,9 @@ def format_duration(seconds: float | None) -> str:
     if minutes > 0:
         return f"{minutes:d}m {secs:02d}s"
     return f"{secs:d}s"
+
+
+def format_distance_mm(value_mm: float) -> str:
+    if value_mm >= 10.0:
+        return f"{format_float(value_mm / 10.0)} cm"
+    return f"{format_float(value_mm)} mm"

@@ -35,6 +35,8 @@ _PLOT_PROFILE_KEYS = {
 
 _APP_STATE_KEYS = {
     "active_profile",
+    "active_tab",
+    "jog_distance_mm",
     "last_svg_file",
     "last_folder",
 }
