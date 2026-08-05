@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 
 from idraw_ui.backend.driver import Driver
-from idraw_ui.backend.models import PlotProfile
+from idraw_ui.backend.models import MachineSettings, PlotProfile
 from idraw_ui.backend.settings_service import SettingsService
 
 
@@ -72,3 +72,17 @@ def test_app_state_persists_jog_distance(tmp_path: Path) -> None:
     state_path = tmp_path / "settings" / "app_state.yaml"
     payload = yaml.safe_load(state_path.read_text(encoding="utf-8"))
     assert payload["jog_distance_mm"] == 37.0
+
+
+def test_machine_settings_persist_selected_model(tmp_path: Path) -> None:
+    service = SettingsService(root_dir=tmp_path)
+
+    machine_settings = MachineSettings(machine_model="idraw-a3")
+    service.save_machine_settings(machine_settings)
+
+    reloaded = SettingsService(root_dir=tmp_path)
+    assert reloaded.machine_settings.machine_model == "idraw-a3"
+
+    machine_path = tmp_path / "settings" / "machine.yaml"
+    payload = yaml.safe_load(machine_path.read_text(encoding="utf-8"))
+    assert payload["machine_model"] == "idraw-a3"

@@ -1,5 +1,5 @@
-name: machine-default
-machine_model: idraw-2.0
-port: null
 baudrate: 115200
+machine_model: idraw-a1
+name: machine-default
+port: null
 serial_timeout: 1.0

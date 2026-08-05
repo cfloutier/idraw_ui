@@ -11,6 +11,7 @@ from typing import Any, Callable
 
 from lxml import etree
 
+from idraw_ui.backend.machine_models import get_machine_model
 from idraw_ui.backend.models import MachineSettings, PlotProfile, PlotState
 
 
@@ -35,14 +36,6 @@ def _default_session_factory() -> Any:
             super().__init__(*args, **kwargs)
 
     return CompatIDraw(default_logging=False)
-
-
-def _map_machine_model(model_name: str) -> int:
-    mapping = {
-        "idraw-2.0": 6,
-        "idraw-1.0": 5,
-    }
-    return mapping.get(model_name.lower(), 6)
 
 
 class Idraw2InternalRuntime:
@@ -305,7 +298,9 @@ class Idraw2InternalRuntime:
         options.auto_rotate = self.plot_profile.auto_rotate
         options.reordering = self.plot_profile.reordering
         options.report_time = False
-        options.model = _map_machine_model(self.machine_settings.machine_model)
+        options.model = get_machine_model(
+            self.machine_settings.machine_model
+        ).runtime_model
 
         if resume_type is not None:
             options.resume_type = resume_type

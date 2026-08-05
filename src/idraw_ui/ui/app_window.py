@@ -9,10 +9,12 @@ from typing import Callable
 
 import customtkinter as ctk
 
+from idraw_ui.backend.machine_models import get_machine_model, list_machine_models
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.models import PlotState
 from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.ui.jog_tab import JogTab
+from idraw_ui.ui.machine_tab import MachineTab
 from idraw_ui.ui.options_tab import OptionsTab
 from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.speed_tab import SpeedTab
@@ -35,6 +37,11 @@ class AppWindow:
         self.title = "idraw_ui"
         ctk.set_appearance_mode("system")
         ctk.set_default_color_theme("blue")
+        self.machine_models = list_machine_models()
+        self.machine_model_labels = [model.label for model in self.machine_models]
+        self._machine_models_by_label = {
+            model.label: model for model in self.machine_models
+        }
 
         self.root = ctk.CTk()
         self.root.title(self.title)
@@ -45,6 +52,11 @@ class AppWindow:
         self.state_var = tk.StringVar(value="State: idle")
         self.svg_var = tk.StringVar(value="SVG: none")
         self.metrics_var = tk.StringVar(value="Estimated: - | Elapsed: - | Distance: -")
+        selected_machine = get_machine_model(self.driver.machine_settings.machine_model)
+        self.machine_model_var = tk.StringVar(value=selected_machine.label)
+        self.machine_size_var = tk.StringVar(
+            value=f"{selected_machine.width_mm} x {selected_machine.height_mm} mm"
+        )
         self.progress_var = tk.DoubleVar(value=0.0)
         self.trace_report_var = tk.StringVar(value="No SVG loaded.")
         self.pen_up_var = tk.DoubleVar(value=self.driver.plot_profile.pen_up_height)
@@ -129,12 +141,14 @@ class AppWindow:
         self.tabs.add("Pen")
         self.tabs.add("Speed")
         self.tabs.add("Options")
+        self.tabs.add("Machine")
 
         self._build_trace_tab(self.tabs.tab("Trace"))
         self._build_jog_tab(self.tabs.tab("Jog"))
         self._build_pen_tab(self.tabs.tab("Pen"))
         self._build_speed_tab(self.tabs.tab("Speed"))
         self._build_options_tab(self.tabs.tab("Options"))
+        self._build_machine_tab(self.tabs.tab("Machine"))
         self._restore_active_tab()
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
@@ -142,6 +156,9 @@ class AppWindow:
 
     def _build_jog_tab(self, tab: ctk.CTkFrame) -> None:
         JogTab(self, tab)
+
+    def _build_machine_tab(self, tab: ctk.CTkFrame) -> None:
+        MachineTab(self, tab)
 
     def _build_pen_tab(self, tab: ctk.CTkFrame) -> None:
         PenTab(self, tab)
@@ -404,11 +421,19 @@ class AppWindow:
         self.settings_service.set_active_profile(profile.name)
         self._sync_profile_selector(profile.name)
 
+    def _persist_machine_settings(self) -> None:
+        self.settings_service.save_machine_settings(self.driver.machine_settings)
+
+    def _sync_machine_controls(self) -> None:
+        machine = get_machine_model(self.driver.machine_settings.machine_model)
+        self.machine_model_var.set(machine.label)
+        self.machine_size_var.set(f"{machine.width_mm} x {machine.height_mm} mm")
+
     def _restore_active_tab(self) -> None:
         if self.tabs is None:
             return
 
-        allowed_tabs = {"Trace", "Jog", "Pen", "Speed", "Options"}
+        allowed_tabs = {"Trace", "Jog", "Machine", "Pen", "Speed", "Options"}
         active_tab = self.settings_service.app_state.active_tab
         if active_tab not in allowed_tabs:
             active_tab = "Jog"
@@ -424,6 +449,18 @@ class AppWindow:
     def on_jog_distance_change(self, value: float) -> None:
         self.settings_service.app_state.jog_distance_mm = float(value)
         self.settings_service.save_app_state()
+
+    def on_machine_model_change(self, label: str) -> None:
+        machine = self._machine_models_by_label.get(label)
+        if machine is None:
+            return
+
+        self.driver.update_machine_settings(machine_model=machine.key)
+        self._persist_machine_settings()
+        self._sync_machine_controls()
+        self.status_var.set(f"OK: Machine model set to {machine.label}")
+        self._set_status_style(ok=True)
+        self._append_trace_log(f"Machine model set to {machine.label}")
 
     def on_profile_select(self, profile_name: str) -> None:
         profile = self.settings_service.load_profile(profile_name)

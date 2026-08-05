@@ -5,6 +5,11 @@ from idraw_ui.backend.idraw2_facade import (
     IdrawRuntime,
 )
 from idraw_ui.backend.idraw2_runtime import Idraw2InternalRuntime
+from idraw_ui.backend.machine_models import (
+    MachineModelDefinition,
+    get_machine_model,
+    list_machine_models,
+)
 from idraw_ui.backend.models import (
     AppState,
     MachineSettings,
@@ -29,6 +34,7 @@ __all__ = [
     "IdrawRuntime",
     "EngineCommandResult",
     "Idraw2InternalRuntime",
+    "MachineModelDefinition",
     "MachineSettings",
     "PlotProfile",
     "AppState",
@@ -36,6 +42,8 @@ __all__ = [
     "PlotState",
     "VendorBridge",
     "SettingsService",
+    "get_machine_model",
+    "list_machine_models",
     "load_machine_settings",
     "load_plot_profile",
     "load_app_state",
