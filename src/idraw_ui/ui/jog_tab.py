@@ -28,42 +28,68 @@ class JogTab:
         nav_bar.grid_columnconfigure((0, 1), weight=1)
 
         self.window.home_button = ctk.CTkButton(
-            nav_bar, text="Home", command=self.window.on_home, height=64
+            nav_bar, text="Home", command=self.window.on_jog_home, height=64
         )
         self.window.home_button.grid(row=0, column=0, sticky="ew", padx=(0, 4))
 
         self.window.center_button = ctk.CTkButton(
-            nav_bar, text="Center", command=self.window.on_center, height=64
+            nav_bar, text="Center", command=self.window.on_jog_center, height=64
         )
         self.window.center_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
+        mode_row = ctk.CTkFrame(frame, fg_color="transparent")
+        mode_row.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 6))
+        mode_row.grid_columnconfigure(0, weight=1)
+        mode_row.grid_columnconfigure(1, weight=0)
+
+        ctk.CTkLabel(
+            mode_row,
+            text="Jog mode",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, sticky="w")
+
+        self.window.jog_mode_selector = ctk.CTkSegmentedButton(
+            mode_row,
+            values=["physical", "table"],
+            command=self.window.on_jog_mode_change,
+        )
+        self.window.jog_mode_selector.grid(row=0, column=1, sticky="e")
+        self.window.jog_mode_selector.set(self.window.jog_mode_var.get())
+
+        ctk.CTkLabel(
+            mode_row,
+            textvariable=self.window.jog_mode_description_var,
+            font=ctk.CTkFont(size=12),
+            text_color=("#5E5E5E", "#A9A9A9"),
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
+
         jog_pad = ctk.CTkFrame(frame, fg_color="transparent")
-        jog_pad.grid(row=1, column=0, padx=24, pady=(0, 10), sticky="nw")
+        jog_pad.grid(row=2, column=0, padx=24, pady=(0, 10), sticky="nw")
         jog_pad.grid_columnconfigure((0, 1, 2), weight=0, minsize=84)
         jog_pad.grid_rowconfigure((0, 1, 2), weight=0, minsize=64)
 
         self.window.jog_pos_y_button = ctk.CTkButton(
-            jog_pad, text="+Y", command=self.window.on_jog_pos_y, width=80, height=64
+            jog_pad, text="+Y", command=self.window.on_jog_top, width=80, height=64
         )
         self.window.jog_pos_y_button.grid(row=0, column=1, padx=3, pady=3)
 
         self.window.jog_neg_x_button = ctk.CTkButton(
-            jog_pad, text="-X", command=self.window.on_jog_neg_x, width=80, height=64
+            jog_pad, text="-X", command=self.window.on_jog_left, width=80, height=64
         )
         self.window.jog_neg_x_button.grid(row=1, column=0, padx=3, pady=3)
 
         self.window.jog_pos_x_button = ctk.CTkButton(
-            jog_pad, text="+X", command=self.window.on_jog_pos_x, width=80, height=64
+            jog_pad, text="+X", command=self.window.on_jog_right, width=80, height=64
         )
         self.window.jog_pos_x_button.grid(row=1, column=2, padx=3, pady=3)
 
         self.window.jog_neg_y_button = ctk.CTkButton(
-            jog_pad, text="-Y", command=self.window.on_jog_neg_y, width=80, height=64
+            jog_pad, text="-Y", command=self.window.on_jog_bottom, width=80, height=64
         )
         self.window.jog_neg_y_button.grid(row=2, column=1, padx=3, pady=3)
 
         slider_row = ctk.CTkFrame(frame, fg_color="transparent")
-        slider_row.grid(row=2, column=0, sticky="ew", padx=20, pady=(0, 10))
+        slider_row.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 10))
         slider_row.grid_columnconfigure(0, weight=1)
         slider_row.grid_columnconfigure(1, weight=0)
 
@@ -100,3 +126,5 @@ class JogTab:
             width=80,
             command=reset_to_one_cm,
         ).grid(row=1, column=1, sticky="e")
+
+        self.window._sync_jog_controls()

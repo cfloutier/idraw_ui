@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import replace
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Callable, Optional
 
 from idraw_ui.backend.idraw2_facade import Idraw2Facade
-from idraw_ui.backend.machine_models import get_machine_model, move_delta_to_corner
+from idraw_ui.backend.machine_models import (
+    get_machine_model,
+    move_delta_to_center,
+    move_delta_to_corner,
+)
 from idraw_ui.backend.models import (
     MachineSettings,
     PlotProfile,
@@ -28,8 +31,8 @@ class Driver:
 
     def __init__(
         self,
-        machine_settings: Optional[MachineSettings] = None,
-        plot_profile: Optional[PlotProfile] = None,
+        machine_settings: MachineSettings | None = None,
+        plot_profile: PlotProfile | None = None,
         bridge: VendorBridge | None = None,
         plot_facade: Idraw2Facade | None = None,
     ) -> None:
@@ -63,7 +66,7 @@ class Driver:
         cls,
         machine_settings_path: str | Path,
         plot_profile_path: str | Path,
-    ) -> "Driver":
+    ) -> Driver:
         return cls(
             machine_settings=load_machine_settings(machine_settings_path),
             plot_profile=load_plot_profile(plot_profile_path),
@@ -79,7 +82,7 @@ class Driver:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Connect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Connect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
@@ -94,7 +97,7 @@ class Driver:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Disconnect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Disconnect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
@@ -108,7 +111,7 @@ class Driver:
         except VendorBridgeError as exc:
             self.progress.message = f"Status failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.progress.message = f"Status failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
@@ -244,16 +247,21 @@ class Driver:
         def do_center() -> str:
             self.bridge.home()
             self.bridge.raise_pen()
+            machine = get_machine_model(self.machine_settings.machine_model)
+            x_mm, y_mm = move_delta_to_center(
+                machine,
+                self.machine_settings.table_orientation,
+            )
             return self.bridge.move_relative(
-                x_mm=300.0,
-                y_mm=-400.0,
+                x_mm=x_mm,
+                y_mm=y_mm,
                 feed_mm_min=self.plot_profile.speed_penup,
             )
 
         return self._run_bridge_action_with_auto_disconnect(
             do_center,
             working_state=PlotState.HOMING,
-            success_message="Center move completed (home + +300/-400 mm)",
+            success_message="Center move completed",
             failure_prefix="Center move failed",
         )
 
@@ -299,7 +307,7 @@ class Driver:
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Manual stop failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Manual stop failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
@@ -333,7 +341,7 @@ class Driver:
         except VendorBridgeError as exc:
             self.progress.message = f"Bridge release failed before plot runtime: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.progress.message = f"Bridge release failed before plot runtime: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
@@ -357,13 +365,13 @@ class Driver:
             response = action()
         except VendorBridgeError as exc:
             action_error = exc
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             action_error = exc
 
         disconnect_error: Exception | None = None
         try:
             self.bridge.disconnect()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             disconnect_error = exc
 
         if action_error is not None:

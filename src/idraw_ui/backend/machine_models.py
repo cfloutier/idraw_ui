@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-
 MACHINE_HOME_CORNERS = (
     "top-left",
     "top-right",
@@ -214,6 +213,49 @@ def move_delta_to_corner(
     x_axis, y_axis = display_axis_vectors(model, orientation)
     x_mm = (delta_x * x_axis[0]) + (delta_y * x_axis[1])
     y_mm = (delta_x * y_axis[0]) + (delta_y * y_axis[1])
+    return x_mm, y_mm
+
+
+def move_delta_to_center(
+    model: MachineModelDefinition,
+    display_orientation: str,
+) -> tuple[float, float]:
+    orientation = display_orientation.strip().lower()
+    display_width_mm = model.height_mm if orientation == "portrait" else model.width_mm
+    display_height_mm = model.width_mm if orientation == "portrait" else model.height_mm
+    home_corner = display_home_corner(model, orientation)
+
+    delta_x = (
+        display_width_mm / 2.0 if "left" in home_corner else -(display_width_mm / 2.0)
+    )
+    delta_y = (
+        display_height_mm / 2.0 if "top" in home_corner else -(display_height_mm / 2.0)
+    )
+
+    x_axis, y_axis = display_axis_vectors(model, orientation)
+    x_mm = (delta_x * x_axis[0]) + (delta_y * x_axis[1])
+    y_mm = (delta_x * y_axis[0]) + (delta_y * y_axis[1])
+    return x_mm, y_mm
+
+
+def table_relative_jog_vector(
+    model: MachineModelDefinition,
+    display_orientation: str,
+    direction: str,
+) -> tuple[float, float]:
+    orientation = display_orientation.strip().lower()
+    x_axis, y_axis = display_axis_vectors(model, orientation)
+    normalized = direction.strip().lower()
+    table_directions = {
+        "right": (1, 0),
+        "left": (-1, 0),
+        "forward": (0, -1),
+        "backward": (0, 1),
+    }
+    desired_dx, desired_dy = table_directions[normalized]
+
+    x_mm = float((desired_dx * x_axis[0]) + (desired_dy * x_axis[1]))
+    y_mm = float((desired_dx * y_axis[0]) + (desired_dy * y_axis[1]))
     return x_mm, y_mm
 
 

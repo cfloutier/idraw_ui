@@ -8,7 +8,6 @@ import yaml
 
 from idraw_ui.backend.models import AppState, MachineSettings, PlotProfile
 
-
 _MACHINE_SETTINGS_KEYS = {
     "name",
     "machine_model",
@@ -41,6 +40,7 @@ _APP_STATE_KEYS = {
     "active_profile",
     "active_tab",
     "jog_distance_mm",
+    "jog_mode",
     "last_svg_file",
     "last_folder",
 }
@@ -52,7 +52,7 @@ def _load_yaml_mapping(path: str | Path) -> Mapping[str, Any]:
     data = yaml.safe_load(raw_text) or {}
 
     if not isinstance(data, dict):
-        raise ValueError(f"Profile file must contain a mapping: {profile_path}")
+        raise TypeError(f"Profile file must contain a mapping: {profile_path}")
 
     return data
 
@@ -63,7 +63,7 @@ def _split_known_keys(
     *,
     kind: str,
 ) -> dict[str, Any]:
-    unknown = sorted(key for key in data.keys() if key not in allowed_keys)
+    unknown = sorted(key for key in data if key not in allowed_keys)
     if unknown:
         raise ValueError(f"Unknown {kind} keys: {', '.join(unknown)}")
     return {key: value for key, value in data.items() if key in allowed_keys}

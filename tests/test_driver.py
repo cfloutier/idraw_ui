@@ -175,6 +175,29 @@ class DriverTests(unittest.TestCase):
             ],
         )
 
+    def test_center_for_test_uses_machine_geometry(self) -> None:
+        driver = Driver(
+            machine_settings=MachineSettings(
+                machine_model="idraw-2.0",
+                table_orientation="portrait",
+            ),
+            bridge=FakeBridge(),
+        )
+
+        result = driver.center_for_test()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            driver.bridge.calls,
+            [
+                ("connect", ()),
+                ("home", ()),
+                ("raise_pen", ()),
+                ("move_relative", (216.0, -297.0, 8000.0)),
+                ("disconnect", ()),
+            ],
+        )
+
     def test_disconnect_failure_is_reported(self) -> None:
         driver = Driver(bridge=FakeBridge(fail_on="disconnect"))
         driver.connect()

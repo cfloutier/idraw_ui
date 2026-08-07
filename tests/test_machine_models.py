@@ -3,7 +3,9 @@ from __future__ import annotations
 from idraw_ui.backend.machine_models import (
     get_machine_model,
     list_machine_models,
+    move_delta_to_center,
     move_delta_to_corner,
+    table_relative_jog_vector,
 )
 
 
@@ -54,3 +56,24 @@ def test_move_delta_to_corner_applies_padding() -> None:
 
     assert padded == (422.0, -584.0)
     assert exact == (432.0, -594.0)
+
+
+def test_move_delta_to_center_uses_machine_geometry() -> None:
+    model = get_machine_model("idraw-a2")
+
+    assert move_delta_to_center(model, "portrait") == (216.0, -297.0)
+    assert move_delta_to_center(model, "landscape") == (216.0, -297.0)
+
+
+def test_table_relative_jog_vector_uses_display_orientation() -> None:
+    model = get_machine_model("idraw-a2")
+
+    assert table_relative_jog_vector(model, "portrait", "right") == (-1.0, 0.0)
+    assert table_relative_jog_vector(model, "portrait", "left") == (1.0, 0.0)
+    assert table_relative_jog_vector(model, "portrait", "forward") == (0.0, -1.0)
+    assert table_relative_jog_vector(model, "portrait", "backward") == (0.0, 1.0)
+
+    assert table_relative_jog_vector(model, "landscape", "right") == (0.0, -1.0)
+    assert table_relative_jog_vector(model, "landscape", "left") == (0.0, 1.0)
+    assert table_relative_jog_vector(model, "landscape", "forward") == (1.0, 0.0)
+    assert table_relative_jog_vector(model, "landscape", "backward") == (-1.0, 0.0)

@@ -37,14 +37,38 @@ Additional behavior now in place:
   post-home move, not a full alternative-corner system.
 - Machine model metadata now stores `physical_home` and per-axis polarity
   (`toward home` vs `inverse`) instead of a separate `physical_orientation` concept.
+- Machine model metadata now also stores axis-layout conventions
+  (`long_axis_is_y`, `x_axis_toward_home`, `y_axis_toward_home`) used as the
+  geometry source of truth.
+- Logical home support is implemented with:
+  - `my_home_corner`
+  - `my_home_padding_mm`
+  - `go_to_my_home()` movement built from machine geometry
+- Centering for test moves now uses machine geometry
+  (`move_delta_to_center`) instead of fixed deltas.
+- Machine tab now renders and controls:
+  - table orientation
+  - selected logical home corner
+  - configurable safety padding in mm
+  - preview markers for physical home, logical home, and padded inset area
+  - explanatory copy: orientation means physical placement on table and affects jog
+- Jog tab now has two operational modes:
+  - physical axis mode (`+X/-X/+Y/-Y`)
+  - table-relative mode (`right/left/forward/backward`)
+- Jog mode is persisted in app state (`settings/app_state.yaml`) and restored
+  on startup.
+- Table-relative jog mapping was rewritten to a deterministic, projection-based
+  geometry rule to remove apparent random X inversions.
 
 Current UI shape:
 
 - `Trace`: `Load SVG`, `Reload`, `Play/Pause/Stop`, quick `Home/Center/Pen Up/Pen Down`, and log view.
-- `Jog`: homing, centering, XY jog controls, and jog-distance persistence.
+- `Jog`: homing, centering, dual jog modes, jog-distance persistence, and
+  persisted jog mode selection.
 - `Pen`: pen height tuning, live apply toggle, reset, and pen test actions.
 - `Draw Options`: speed/acceleration and plot options merged into one page.
-- `Machine`: machine model selection.
+- `Machine`: machine model, table orientation, logical home corner, home padding,
+  and geometry preview.
 
 ## Architecture choices kept for continuity
 
@@ -58,40 +82,39 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 ## Next plans (from current project direction)
 
-1. Machine configuration refinements:
+1. Tracing orientation adaptation
 
-- decide whether additional advanced machine settings should stay file-only or get selective UI exposure
-- document the intended operator workflow for `digest` and reload/estimate behavior
+- During trace execution, adapt orientation so the drawing is placed correctly
+  for the selected table/machine conventions.
 
-2. Table calibration management:
+2. Post-load SVG preview mode
 
-- table size setup
-- preferred home selection
-- calibration page should be able to draw placement frames for common paper sizes:
-  - A4
-  - A3
-  - A2
-  - Letter
-  - Raisin
+- After loading an SVG, show a preview of the SVG footprint/gabarit as read from
+  the file against the table and current Machine tab choices.
 
-3. SVG rotation handling:
+3. SVG transformation pipeline
 
-- choosing the home position will imply different SVG orientations
-- rotate SVG automatically according to chosen home/calibration orientation
+- Orient the SVG correctly from those machine choices, potentially by
+  transforming/manipulating the SVG on the fly.
 
-4. Home and center semantics:
+4. README split pass (before new tool proposal)
 
-- keep `physical home` explicit as the microswitch-based reference point
-- add a separate logical/target home corner model on top of physical homing
-- redefine `Home` behavior according to the selected machine size
-- redefine `Center` behavior according to the selected machine size
-- keep these commands aligned with the chosen home corner/orientation rules
+- Before proposing the position-mark tool, do a full README pass to separate
+  developer-facing notes from user-facing documentation.
 
-5. Movement speed tuning:
+5. Position-mark drawing tool
 
-- decide whether UI labels or docs should explicitly surface the `mm/min` -> `in/s` estimation conversion
-- validate estimation sensitivity on a wider set of large SVGs
-²
+- Add a tool to draw paper/page placement marks on the table.
+
+6. Time-estimation refinement
+
+- Improve and calibrate time-estimation calculations.
+
+7. Play/Pause reliability fixes
+
+- Investigate and fix remaining Play/Pause edge cases.
+- Specific priority: dot-heavy jobs where points are currently lost.
+
 ## Practical note for next contributors
 
 - Keep validating each change on real hardware before locking conventions.

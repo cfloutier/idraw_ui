@@ -1,5 +1,6 @@
 active_profile: bic
 active_tab: Machine
 jog_distance_mm: 10.0
+jog_mode: table
 last_folder: C:\dev\__tracer\idraw_ui\test_svg_files
 last_svg_file: C:\dev\__tracer\idraw_ui\test_svg_files\_test_spirale.svg

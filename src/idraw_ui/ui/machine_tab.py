@@ -36,7 +36,7 @@ class MachineTab:
         frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         frame.grid_columnconfigure(0, weight=0, minsize=250)
         frame.grid_columnconfigure(1, weight=1)
-        frame.grid_rowconfigure(3, weight=1)
+        frame.grid_rowconfigure(11, weight=1)
 
         ctk.CTkLabel(
             frame,
@@ -74,9 +74,19 @@ class MachineTab:
 
         ctk.CTkLabel(
             frame,
+            text=(
+                "Orientation = how the plotter is physically placed on the table. "
+                "This is a practical choice and it defines Jog directions."
+            ),
+            justify="left",
+            wraplength=220,
+        ).grid(row=5, column=0, sticky="ew", padx=8, pady=(0, 8))
+
+        ctk.CTkLabel(
+            frame,
             text="My home",
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=5, column=0, sticky="w", padx=8, pady=(3, 2))
+        ).grid(row=6, column=0, sticky="w", padx=8, pady=(3, 2))
 
         ctk.CTkOptionMenu(
             frame,
@@ -84,10 +94,10 @@ class MachineTab:
             variable=self.window.machine_home_corner_var,
             command=self.window.on_machine_home_corner_change,
             width=240,
-        ).grid(row=6, column=0, sticky="w", padx=8, pady=(0, 6))
+        ).grid(row=7, column=0, sticky="w", padx=8, pady=(0, 6))
 
         padding_box = ctk.CTkFrame(frame, fg_color="transparent")
-        padding_box.grid(row=7, column=0, sticky="ew", padx=8, pady=(0, 8))
+        padding_box.grid(row=8, column=0, sticky="ew", padx=8, pady=(0, 8))
         padding_box.grid_columnconfigure(0, weight=1)
         padding_box.grid_columnconfigure(1, weight=0)
 
@@ -121,7 +131,7 @@ class MachineTab:
         ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
 
         home_actions = ctk.CTkFrame(frame, fg_color="transparent")
-        home_actions.grid(row=8, column=0, sticky="ew", padx=8, pady=(0, 8))
+        home_actions.grid(row=9, column=0, sticky="ew", padx=8, pady=(0, 8))
         home_actions.grid_columnconfigure((0, 1), weight=1)
 
         self.window.machine_physical_home_button = ctk.CTkButton(
@@ -145,7 +155,7 @@ class MachineTab:
         )
 
         info = ctk.CTkFrame(frame, corner_radius=10)
-        info.grid(row=9, column=0, sticky="new", padx=8, pady=(0, 8))
+        info.grid(row=10, column=0, sticky="new", padx=8, pady=(0, 8))
         info.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -172,7 +182,7 @@ class MachineTab:
 
         preview = ctk.CTkFrame(frame, corner_radius=10)
         preview.grid(
-            row=1, column=1, rowspan=9, sticky="nsew", padx=(0, 8), pady=(16, 8)
+            row=1, column=1, rowspan=10, sticky="nsew", padx=(0, 8), pady=(16, 8)
         )
         preview.grid_columnconfigure(0, weight=1)
         preview.grid_rowconfigure(2, weight=1)

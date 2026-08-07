@@ -1,22 +1,23 @@
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import threading
 import time
 import tkinter as tk
+from collections.abc import Callable
+from pathlib import Path
 from tkinter import filedialog
-from typing import Callable
 from xml.etree import ElementTree as ET
 
 import customtkinter as ctk
 
+from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.machine_models import (
     MACHINE_HOME_CORNERS,
     get_machine_model,
     list_machine_models,
+    table_relative_jog_vector,
 )
-from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.models import PlotProfile, PlotState
 from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.ui.draw_options_tab import DrawOptionsTab
@@ -24,14 +25,14 @@ from idraw_ui.ui.jog_tab import JogTab
 from idraw_ui.ui.machine_tab import MachineTab
 from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.progress_bar import ProgressBar
-from idraw_ui.ui.top_bar import TopBar
-from idraw_ui.ui.trace_tab import TraceTab
 from idraw_ui.ui.tools import (
     _mm_min_to_inch_s,
     format_distance_mm,
     format_duration,
     format_float,
 )
+from idraw_ui.ui.top_bar import TopBar
+from idraw_ui.ui.trace_tab import TraceTab
 
 
 class AppWindow:
@@ -56,7 +57,7 @@ class AppWindow:
 
         self.root = ctk.CTk()
         self.root.title(self.title)
-        self.root.geometry("980x700")
+        self.root.geometry("980x800")
         self.root.minsize(880, 620)
 
         self.status_var = tk.StringVar(value="Ready")
@@ -91,6 +92,13 @@ class AppWindow:
         self.jog_distance_var = tk.DoubleVar(
             value=self.settings_service.app_state.jog_distance_mm
         )
+        saved_jog_mode = self.settings_service.app_state.jog_mode.strip().lower()
+        if saved_jog_mode not in {"physical", "table"}:
+            saved_jog_mode = "physical"
+        self.jog_mode_var = tk.StringVar(value=saved_jog_mode)
+        self.jog_mode_description_var = tk.StringVar(
+            value="Current: physical axes (+X / +Y)"
+        )
         self.reordering_var = tk.StringVar(
             value=self._reordering_label(self.driver.plot_profile.reordering)
         )
@@ -117,6 +125,7 @@ class AppWindow:
         self.jog_pos_y_button: ctk.CTkButton | None = None
         self.jog_neg_x_button: ctk.CTkButton | None = None
         self.jog_neg_y_button: ctk.CTkButton | None = None
+        self.jog_mode_selector: ctk.CTkSegmentedButton | None = None
         self.connect_button: ctk.CTkButton | None = None
         self.disconnect_button: ctk.CTkButton | None = None
         self.trace_log: ctk.CTkTextbox | None = None
@@ -148,7 +157,7 @@ class AppWindow:
         cls,
         machine_settings_path: str | Path,
         plot_profile_path: str | Path,
-    ) -> "AppWindow":
+    ) -> AppWindow:
         return cls(Driver.from_config_files(machine_settings_path, plot_profile_path))
 
     def _build_layout(self) -> None:
@@ -373,7 +382,7 @@ class AppWindow:
     def _detect_layer_speed_overrides(self, svg_path: str | Path) -> list[int]:
         try:
             root = ET.parse(str(svg_path)).getroot()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return []
 
         labels: list[str] = []
@@ -647,6 +656,15 @@ class AppWindow:
         self.settings_service.app_state.jog_distance_mm = float(value)
         self.settings_service.save_app_state()
 
+    def on_jog_mode_change(self, value: str) -> None:
+        mode = str(value).strip().lower()
+        if mode not in {"physical", "table"}:
+            mode = "physical"
+        self.jog_mode_var.set(mode)
+        self.settings_service.app_state.jog_mode = mode
+        self.settings_service.save_app_state()
+        self._sync_jog_controls()
+
     def on_machine_model_change(self, label: str) -> None:
         machine = self._machine_models_by_label.get(label)
         if machine is None:
@@ -866,7 +884,7 @@ class AppWindow:
                 estimate_result = self.driver.estimate()
                 estimate_elapsed = time.perf_counter() - estimate_started
                 estimate_value = self.driver.get_progress().estimated_seconds
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             load_elapsed = time.perf_counter() - load_started
             load_result = DriverCommandResult(
                 ok=False,
@@ -966,6 +984,9 @@ class AppWindow:
     def on_home(self) -> None:
         self._run_manual_action_async("Home", self.driver.home)
 
+    def on_jog_home(self) -> None:
+        self._run_manual_action_async("Home", self.driver.go_to_my_home)
+
     def on_machine_physical_home(self) -> None:
         self._run_manual_action_async("Physical Home", self.driver.home)
 
@@ -974,6 +995,105 @@ class AppWindow:
 
     def on_center(self) -> None:
         self._run_manual_action_async("Center", self.driver.center_for_test)
+
+    def on_jog_center(self) -> None:
+        self._run_manual_action_async("Center", self.driver.center_for_test)
+
+    def _sync_jog_controls(self) -> None:
+        mode = self.jog_mode_var.get().strip().lower()
+        if mode == "table":
+            description = (
+                "Current: table directions (right / left / forward / backward)"
+            )
+            top_text = "Forward"
+            left_text = "Left"
+            right_text = "Right"
+            bottom_text = "Backward"
+        else:
+            mode = "physical"
+            description = "Current: physical axes (+X / +Y)"
+            top_text = "+Y"
+            left_text = "-X"
+            right_text = "+X"
+            bottom_text = "-Y"
+
+        self.jog_mode_var.set(mode)
+        self.jog_mode_description_var.set(description)
+
+        if self.jog_pos_y_button is not None:
+            self.jog_pos_y_button.configure(text=top_text)
+        if self.jog_neg_x_button is not None:
+            self.jog_neg_x_button.configure(text=left_text)
+        if self.jog_pos_x_button is not None:
+            self.jog_pos_x_button.configure(text=right_text)
+        if self.jog_neg_y_button is not None:
+            self.jog_neg_y_button.configure(text=bottom_text)
+
+    def _jog_mode_is_table(self) -> bool:
+        return self.jog_mode_var.get().strip().lower() == "table"
+
+    def _jog_in_current_mode(self, direction: str, action: str) -> None:
+        distance = float(self.jog_distance_var.get())
+        if self._jog_mode_is_table():
+            machine = get_machine_model(self.driver.machine_settings.machine_model)
+            x_mm, y_mm = table_relative_jog_vector(
+                machine,
+                self.driver.machine_settings.table_orientation,
+                direction,
+            )
+            self._jog(x_mm * distance, y_mm * distance, action)
+            return
+
+        physical_vectors = {
+            "top": (0.0, distance, f"+Y {format_float(distance)} mm"),
+            "left": (-distance, 0.0, f"-X {format_float(distance)} mm"),
+            "right": (distance, 0.0, f"+X {format_float(distance)} mm"),
+            "bottom": (0.0, -distance, f"-Y {format_float(distance)} mm"),
+        }
+        x_mm, y_mm, label = physical_vectors[direction]
+        self._jog(x_mm, y_mm, label)
+
+    def on_jog_top(self) -> None:
+        distance = float(self.jog_distance_var.get())
+        if self._jog_mode_is_table():
+            self._jog_in_current_mode("forward", f"Forward {format_float(distance)} mm")
+            return
+        self._jog_in_current_mode("top", f"+Y {format_float(distance)} mm")
+
+    def on_jog_left(self) -> None:
+        distance = float(self.jog_distance_var.get())
+        if self._jog_mode_is_table():
+            self._jog_in_current_mode("left", f"Left {format_float(distance)} mm")
+            return
+        self._jog_in_current_mode("left", f"-X {format_float(distance)} mm")
+
+    def on_jog_right(self) -> None:
+        distance = float(self.jog_distance_var.get())
+        if self._jog_mode_is_table():
+            self._jog_in_current_mode("right", f"Right {format_float(distance)} mm")
+            return
+        self._jog_in_current_mode("right", f"+X {format_float(distance)} mm")
+
+    def on_jog_bottom(self) -> None:
+        distance = float(self.jog_distance_var.get())
+        if self._jog_mode_is_table():
+            self._jog_in_current_mode(
+                "backward", f"Backward {format_float(distance)} mm"
+            )
+            return
+        self._jog_in_current_mode("bottom", f"-Y {format_float(distance)} mm")
+
+    def on_jog_pos_x(self) -> None:
+        self.on_jog_right()
+
+    def on_jog_pos_y(self) -> None:
+        self.on_jog_top()
+
+    def on_jog_neg_x(self) -> None:
+        self.on_jog_left()
+
+    def on_jog_neg_y(self) -> None:
+        self.on_jog_bottom()
 
     def _jog(self, x_mm: float, y_mm: float, action: str) -> None:
         self._run_manual_action_async(
@@ -1019,7 +1139,7 @@ class AppWindow:
     ) -> None:
         try:
             action_result = action_func()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             action_result = DriverCommandResult(
                 ok=False,
                 message=f"Unexpected {action_name.lower()} failure: {exc}",
@@ -1051,22 +1171,6 @@ class AppWindow:
             self.root.after(0, finish_on_ui_thread)
         except RuntimeError:
             return
-
-    def on_jog_pos_x(self) -> None:
-        distance = float(self.jog_distance_var.get())
-        self._jog(distance, 0.0, f"+X {format_float(distance)} mm")
-
-    def on_jog_pos_y(self) -> None:
-        distance = float(self.jog_distance_var.get())
-        self._jog(0.0, distance, f"+Y {format_float(distance)} mm")
-
-    def on_jog_neg_x(self) -> None:
-        distance = float(self.jog_distance_var.get())
-        self._jog(-distance, 0.0, f"-X {format_float(distance)} mm")
-
-    def on_jog_neg_y(self) -> None:
-        distance = float(self.jog_distance_var.get())
-        self._jog(0.0, -distance, f"-Y {format_float(distance)} mm")
 
     def on_pen_up(self) -> None:
         self._update_from_result(self.driver.raise_pen())

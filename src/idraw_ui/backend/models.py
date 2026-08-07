@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class PlotState(str, Enum):
@@ -50,6 +49,7 @@ class AppState:
     active_profile: str = "default"
     active_tab: str = "Jog"
     jog_distance_mm: float = 10.0
+    jog_mode: str = "physical"
     last_svg_file: str | None = None
     last_folder: str | None = None
 
@@ -58,7 +58,7 @@ class AppState:
 class PlotProgress:
     state: PlotState = PlotState.IDLE
     elapsed_seconds: float = 0.0
-    estimated_seconds: Optional[float] = None
+    estimated_seconds: float | None = None
     distance_pen_down_mm: float = 0.0
     distance_total_mm: float = 0.0
     pen_lifts: int = 0
