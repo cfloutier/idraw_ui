@@ -57,6 +57,9 @@ class AppWindow:
         self.metrics_var = tk.StringVar(value="Estimated: - | Elapsed: - | Distance: -")
         selected_machine = get_machine_model(self.driver.machine_settings.machine_model)
         self.machine_model_var = tk.StringVar(value=selected_machine.label)
+        self.table_orientation_var = tk.StringVar(
+            value=self.driver.machine_settings.table_orientation
+        )
         self.machine_size_var = tk.StringVar(
             value=f"{selected_machine.width_mm} x {selected_machine.height_mm} mm"
         )
@@ -562,6 +565,7 @@ class AppWindow:
     def _sync_machine_controls(self) -> None:
         machine = get_machine_model(self.driver.machine_settings.machine_model)
         self.machine_model_var.set(machine.label)
+        self.table_orientation_var.set(self.driver.machine_settings.table_orientation)
         self.machine_size_var.set(f"{machine.width_mm} x {machine.height_mm} mm")
 
     def _restore_active_tab(self) -> None:
@@ -620,6 +624,18 @@ class AppWindow:
         self._set_status_message(f"OK: Machine model set to {machine.label}")
         self._set_status_style(ok=True)
         self._append_trace_log(f"Machine model set to {machine.label}")
+
+    def on_table_orientation_change(self, value: str) -> None:
+        orientation = str(value).strip().lower()
+        if orientation not in {"landscape", "portrait"}:
+            return
+
+        self.driver.update_machine_settings(table_orientation=orientation)
+        self._persist_machine_settings()
+        self._sync_machine_controls()
+        self._set_status_message(f"OK: Table orientation set to {orientation}")
+        self._set_status_style(ok=True)
+        self._append_trace_log(f"Table orientation set to {orientation}")
 
     def on_profile_select(self, profile_name: str) -> None:
         profile = self.settings_service.load_profile(profile_name)

@@ -84,7 +84,7 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 - decide whether UI labels or docs should explicitly surface the `mm/min` -> `in/s` estimation conversion
 - validate estimation sensitivity on a wider set of large SVGs
-
+²
 ## Practical note for next contributors
 
 - Keep validating each change on real hardware before locking conventions.

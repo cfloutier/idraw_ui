@@ -12,6 +12,7 @@ from idraw_ui.backend.models import AppState, MachineSettings, PlotProfile
 _MACHINE_SETTINGS_KEYS = {
     "name",
     "machine_model",
+    "table_orientation",
     "port",
     "baudrate",
     "serial_timeout",

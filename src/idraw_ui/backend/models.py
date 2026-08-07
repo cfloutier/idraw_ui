@@ -19,6 +19,7 @@ class PlotState(str, Enum):
 class MachineSettings:
     name: str = "machine-default"
     machine_model: str = "idraw-2.0"
+    table_orientation: str = "landscape"
     port: str | None = None
     baudrate: int = 115200
     serial_timeout: float = 1.0

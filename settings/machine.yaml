@@ -4,3 +4,4 @@ machine_model: idraw-a1
 name: machine-default
 port: null
 serial_timeout: 1.0
+table_orientation: landscape
