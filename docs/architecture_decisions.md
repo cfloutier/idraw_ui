@@ -140,6 +140,40 @@ Result:
 - UI trace logs now print both the UI speed values and preview-converted values
   used for estimation diagnostics.
 
+### 7) Physical home vs logical home must stay explicit
+
+Reason:
+- The legacy Inkscape extension distinguishes between the firmware homing point
+  and a separate `machine_origin` helper.
+- In the extension, true homing remains a DrawCore `$H` operation.
+- The extension's `machine_origin` command is a special hard-coded follow-up move
+  after physical homing; it is not a general user-selectable alternative corner system.
+- The extension's portrait/landscape handling is focused on document rotation,
+  not on redefining the meaning of home.
+
+Result:
+- In this app, `physical home` should mean the real microswitch-based homing point.
+- Model metadata should describe `physical home` directly, plus whether each
+  physical axis points toward home or away from it.
+- Any future user-selected corner should be treated as a separate `logical home`
+  or target corner, derived from the physical home by an additional motion rule.
+- `Home`, `Center`, and SVG orientation rules should be built from that explicit
+  distinction instead of overloading the firmware home concept.
+
+Convention note:
+- We do not use a separate `physical orientation` concept in machine model data.
+- The chosen convention is that model data records the `physical_home` corner in
+  the vertical table representation, then records axis polarity independently:
+  - `X` can point toward home or away from home
+  - `Y` can point toward home or away from home
+- For the currently validated machine family, `Y` points toward home and `X`
+  points away from home.
+
+Developer note:
+- The Inkscape extension is useful as a reference for serial commands and resume
+  behavior, but it does not already implement the configurable four-corner home
+  model planned here.
+
 ## Operational notes
 
 - Axis mapping and hardware validation logs are tracked in `docs/hardware_notes.md`.

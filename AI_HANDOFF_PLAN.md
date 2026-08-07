@@ -32,6 +32,11 @@ Additional behavior now in place:
 - Speed estimation now uses preview-only unit conversion from UI `mm/min` values to runtime `in/s` values.
 - Real plotting keeps the raw profile speed values unchanged; the conversion affects estimation only.
 - Estimate diagnostics now log both the UI speed values and the converted preview values.
+- Inkscape extension analysis confirmed that legacy `home` remains the physical
+  firmware homing point, while `machine_origin` is only a special hard-coded
+  post-home move, not a full alternative-corner system.
+- Machine model metadata now stores `physical_home` and per-axis polarity
+  (`toward home` vs `inverse`) instead of a separate `physical_orientation` concept.
 
 Current UI shape:
 
@@ -76,6 +81,8 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 4. Home and center semantics:
 
+- keep `physical home` explicit as the microswitch-based reference point
+- add a separate logical/target home corner model on top of physical homing
 - redefine `Home` behavior according to the selected machine size
 - redefine `Center` behavior according to the selected machine size
 - keep these commands aligned with the chosen home corner/orientation rules

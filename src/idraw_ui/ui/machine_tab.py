@@ -4,6 +4,13 @@ import tkinter as tk
 
 import customtkinter as ctk
 
+from idraw_ui.backend.machine_models import (
+    MACHINE_HOME_CORNERS,
+    MachineModelDefinition,
+    display_axis_vectors,
+    display_home_corner,
+)
+from idraw_ui.ui.tools import format_distance_mm
 
 _CANVAS_WIDTH = 420
 _CANVAS_HEIGHT = 360
@@ -65,8 +72,80 @@ class MachineTab:
             width=240,
         ).grid(row=4, column=0, sticky="w", padx=8, pady=(0, 8))
 
+        ctk.CTkLabel(
+            frame,
+            text="My home",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=5, column=0, sticky="w", padx=8, pady=(3, 2))
+
+        ctk.CTkOptionMenu(
+            frame,
+            values=list(MACHINE_HOME_CORNERS),
+            variable=self.window.machine_home_corner_var,
+            command=self.window.on_machine_home_corner_change,
+            width=240,
+        ).grid(row=6, column=0, sticky="w", padx=8, pady=(0, 6))
+
+        padding_box = ctk.CTkFrame(frame, fg_color="transparent")
+        padding_box.grid(row=7, column=0, sticky="ew", padx=8, pady=(0, 8))
+        padding_box.grid_columnconfigure(0, weight=1)
+        padding_box.grid_columnconfigure(1, weight=0)
+
+        ctk.CTkLabel(
+            padding_box,
+            text="Padding",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, sticky="w")
+
+        padding_value_var = tk.StringVar(
+            value=format_distance_mm(self.window.machine_home_padding_var.get())
+        )
+
+        def on_padding_change(value: float) -> None:
+            padding_value_var.set(format_distance_mm(value))
+            self.window.on_machine_home_padding_change(value)
+
+        ctk.CTkLabel(
+            padding_box,
+            textvariable=padding_value_var,
+            font=ctk.CTkFont(size=12),
+        ).grid(row=0, column=1, sticky="e")
+
+        ctk.CTkSlider(
+            padding_box,
+            from_=0.0,
+            to=50.0,
+            variable=self.window.machine_home_padding_var,
+            command=on_padding_change,
+            number_of_steps=50,
+        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+
+        home_actions = ctk.CTkFrame(frame, fg_color="transparent")
+        home_actions.grid(row=8, column=0, sticky="ew", padx=8, pady=(0, 8))
+        home_actions.grid_columnconfigure((0, 1), weight=1)
+
+        self.window.machine_physical_home_button = ctk.CTkButton(
+            home_actions,
+            text="Physical Home",
+            command=self.window.on_machine_physical_home,
+            height=40,
+        )
+        self.window.machine_physical_home_button.grid(
+            row=0, column=0, sticky="ew", padx=(0, 4)
+        )
+
+        self.window.machine_my_home_button = ctk.CTkButton(
+            home_actions,
+            text="My home",
+            command=self.window.on_machine_my_home,
+            height=40,
+        )
+        self.window.machine_my_home_button.grid(
+            row=0, column=1, sticky="ew", padx=(4, 0)
+        )
+
         info = ctk.CTkFrame(frame, corner_radius=10)
-        info.grid(row=5, column=0, sticky="new", padx=8, pady=(0, 8))
+        info.grid(row=9, column=0, sticky="new", padx=8, pady=(0, 8))
         info.grid_columnconfigure(0, weight=1)
 
         ctk.CTkLabel(
@@ -93,7 +172,7 @@ class MachineTab:
 
         preview = ctk.CTkFrame(frame, corner_radius=10)
         preview.grid(
-            row=1, column=1, rowspan=5, sticky="nsew", padx=(0, 8), pady=(3, 8)
+            row=1, column=1, rowspan=9, sticky="nsew", padx=(0, 8), pady=(16, 8)
         )
         preview.grid_columnconfigure(0, weight=1)
         preview.grid_rowconfigure(2, weight=1)
@@ -131,6 +210,12 @@ class MachineTab:
         self.window.table_orientation_var.trace_add(
             "write", self._on_machine_model_var_changed
         )
+        self.window.machine_home_corner_var.trace_add(
+            "write", self._on_machine_model_var_changed
+        )
+        self.window.machine_home_padding_var.trace_add(
+            "write", self._on_machine_model_var_changed
+        )
         self._redraw_table_preview()
 
     def _on_machine_model_var_changed(self, *_args: object) -> None:
@@ -140,10 +225,18 @@ class MachineTab:
         self._redraw_table_preview()
 
     @staticmethod
-    def _physical_home_corner_for_orientation(orientation: str) -> str:
-        if orientation == "portrait":
-            return "bottom-right"
-        return "bottom-left"
+    def _display_axis_vectors(
+        model: MachineModelDefinition,
+        display_orientation: str,
+    ) -> tuple[tuple[int, int], tuple[int, int]]:
+        return display_axis_vectors(model, display_orientation)
+
+    @staticmethod
+    def _physical_home_corner_for_display(
+        model: MachineModelDefinition,
+        display_orientation: str,
+    ) -> str:
+        return display_home_corner(model, display_orientation)
 
     def _redraw_table_preview(self) -> None:
         if self._table_canvas is None:
@@ -288,7 +381,37 @@ class MachineTab:
             (left, bottom, "Bottom left"),
             (right, bottom, "Bottom right"),
         ]
-        physical_home_corner = self._physical_home_corner_for_orientation(orientation)
+        physical_home_corner = self._physical_home_corner_for_display(
+            model, orientation
+        )
+        selected_home_corner = self.window.machine_home_corner_var.get().strip().lower()
+        padding_mm = max(0.0, float(self.window.machine_home_padding_var.get()))
+        safe_inset = min(
+            padding_mm * scale,
+            max(0.0, rect_width / 2.0 - 6),
+            max(0.0, rect_height / 2.0 - 6),
+        )
+        if safe_inset > 0.0:
+            canvas.create_rectangle(
+                left + safe_inset,
+                top + safe_inset,
+                right - safe_inset,
+                bottom - safe_inset,
+                outline="#3A7BD5",
+                width=1,
+                dash=(4, 3),
+                tags=("preview",),
+            )
+            canvas.create_text(
+                left + safe_inset + 10,
+                top + safe_inset + 10,
+                text=f"Padding {format_distance_mm(padding_mm)}",
+                anchor="nw",
+                fill="#3A7BD5",
+                font=("Segoe UI", 9, "bold"),
+                tags=("preview",),
+            )
+        x_axis_dir, y_axis_dir = self._display_axis_vectors(model, orientation)
         for x, y, label in corners:
             canvas.create_oval(
                 x - 5,
@@ -335,9 +458,7 @@ class MachineTab:
                 home_label_x = x - 18 if is_left else x + 18
                 home_label_y = y - 18 if is_top else y - 26
                 home_anchor = (
-                    "se"
-                    if (is_left and is_top)
-                    else ("ne" if is_left else ("sw" if is_top else "sw"))
+                    "se" if (is_left and is_top) else ("ne" if is_left else "sw")
                 )
                 canvas.create_text(
                     home_label_x,
@@ -348,6 +469,82 @@ class MachineTab:
                     font=("Segoe UI", 9, "bold"),
                     tags=("preview",),
                 )
+
+            if corner_key == selected_home_corner:
+                marker_x = left + safe_inset if is_left else right - safe_inset
+                marker_y = top + safe_inset if is_top else bottom - safe_inset
+                canvas.create_oval(
+                    marker_x - 11,
+                    marker_y - 11,
+                    marker_x + 11,
+                    marker_y + 11,
+                    outline="#3A7BD5",
+                    width=3,
+                    tags=("preview",),
+                )
+                my_home_label_x = marker_x + 18 if is_left else marker_x - 18
+                my_home_label_y = marker_y + 18 if is_top else marker_y - 18
+                my_home_anchor = (
+                    "sw"
+                    if (is_left and is_top)
+                    else ("se" if is_top else ("nw" if is_left else "ne"))
+                )
+                canvas.create_text(
+                    my_home_label_x,
+                    my_home_label_y,
+                    text="My home",
+                    anchor=my_home_anchor,
+                    fill="#3A7BD5",
+                    font=("Segoe UI", 9, "bold"),
+                    tags=("preview",),
+                )
+
+        axis_origin_x = (left + right) / 2.0
+        axis_origin_y = (top + bottom) / 2.0
+        axis_length = 32
+
+        x_end_x = axis_origin_x + (x_axis_dir[0] * axis_length)
+        x_end_y = axis_origin_y + (x_axis_dir[1] * axis_length)
+        y_end_x = axis_origin_x + (y_axis_dir[0] * axis_length)
+        y_end_y = axis_origin_y + (y_axis_dir[1] * axis_length)
+
+        canvas.create_line(
+            axis_origin_x,
+            axis_origin_y,
+            x_end_x,
+            x_end_y,
+            fill="#2E7D32",
+            width=2,
+            arrow="last",
+            tags=("preview",),
+        )
+        canvas.create_text(
+            x_end_x + (x_axis_dir[0] * 10),
+            x_end_y + (x_axis_dir[1] * 10),
+            text="X+",
+            fill="#2E7D32",
+            font=("Segoe UI", 9, "bold"),
+            tags=("preview",),
+        )
+
+        canvas.create_line(
+            axis_origin_x,
+            axis_origin_y,
+            y_end_x,
+            y_end_y,
+            fill="#8E5EA2",
+            width=2,
+            arrow="last",
+            tags=("preview",),
+        )
+        canvas.create_text(
+            y_end_x + (y_axis_dir[0] * 10),
+            y_end_y + (y_axis_dir[1] * 10),
+            text="Y+",
+            fill="#8E5EA2",
+            font=("Segoe UI", 9, "bold"),
+            tags=("preview",),
+        )
 
         bbox = canvas.bbox("preview")
         if bbox is not None:

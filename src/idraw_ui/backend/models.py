@@ -20,6 +20,8 @@ class MachineSettings:
     name: str = "machine-default"
     machine_model: str = "idraw-2.0"
     table_orientation: str = "landscape"
+    my_home_corner: str = "top-left"
+    my_home_padding_mm: float = 10.0
     port: str | None = None
     baudrate: int = 115200
     serial_timeout: float = 1.0

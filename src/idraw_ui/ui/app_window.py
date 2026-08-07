@@ -11,7 +11,11 @@ from xml.etree import ElementTree as ET
 
 import customtkinter as ctk
 
-from idraw_ui.backend.machine_models import get_machine_model, list_machine_models
+from idraw_ui.backend.machine_models import (
+    MACHINE_HOME_CORNERS,
+    get_machine_model,
+    list_machine_models,
+)
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.models import PlotProfile, PlotState
 from idraw_ui.backend.settings_service import SettingsService
@@ -22,7 +26,12 @@ from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.progress_bar import ProgressBar
 from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
-from idraw_ui.ui.tools import _mm_min_to_inch_s, format_duration, format_float
+from idraw_ui.ui.tools import (
+    _mm_min_to_inch_s,
+    format_distance_mm,
+    format_duration,
+    format_float,
+)
 
 
 class AppWindow:
@@ -60,6 +69,12 @@ class AppWindow:
         self.table_orientation_var = tk.StringVar(
             value=self.driver.machine_settings.table_orientation
         )
+        self.machine_home_corner_var = tk.StringVar(
+            value=self.driver.machine_settings.my_home_corner
+        )
+        self.machine_home_padding_var = tk.DoubleVar(
+            value=self.driver.machine_settings.my_home_padding_mm
+        )
         self.machine_size_var = tk.StringVar(
             value=f"{selected_machine.width_mm} x {selected_machine.height_mm} mm"
         )
@@ -94,6 +109,8 @@ class AppWindow:
         self.stop_button: ctk.CTkButton | None = None
         self.home_button: ctk.CTkButton | None = None
         self.center_button: ctk.CTkButton | None = None
+        self.machine_physical_home_button: ctk.CTkButton | None = None
+        self.machine_my_home_button: ctk.CTkButton | None = None
         self.trace_home_button: ctk.CTkButton | None = None
         self.trace_center_button: ctk.CTkButton | None = None
         self.jog_pos_x_button: ctk.CTkButton | None = None
@@ -104,6 +121,7 @@ class AppWindow:
         self.disconnect_button: ctk.CTkButton | None = None
         self.trace_log: ctk.CTkTextbox | None = None
         self.progress_bar: ProgressBar | None = None
+        self.home_corner_options = list(MACHINE_HOME_CORNERS)
 
         self._last_loaded_svg: Path | None = None
         self._last_reloadable_svg: Path | None = None
@@ -461,6 +479,18 @@ class AppWindow:
                 if (not is_drawing and not is_loading and not is_manual)
                 else "disabled"
             )
+        if self.machine_physical_home_button is not None:
+            self.machine_physical_home_button.configure(
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
+            )
+        if self.machine_my_home_button is not None:
+            self.machine_my_home_button.configure(
+                state="normal"
+                if (not is_drawing and not is_loading and not is_manual)
+                else "disabled"
+            )
         if self.trace_home_button is not None:
             self.trace_home_button.configure(
                 state="normal"
@@ -566,6 +596,10 @@ class AppWindow:
         machine = get_machine_model(self.driver.machine_settings.machine_model)
         self.machine_model_var.set(machine.label)
         self.table_orientation_var.set(self.driver.machine_settings.table_orientation)
+        self.machine_home_corner_var.set(self.driver.machine_settings.my_home_corner)
+        self.machine_home_padding_var.set(
+            self.driver.machine_settings.my_home_padding_mm
+        )
         self.machine_size_var.set(f"{machine.width_mm} x {machine.height_mm} mm")
 
     def _restore_active_tab(self) -> None:
@@ -636,6 +670,29 @@ class AppWindow:
         self._set_status_message(f"OK: Table orientation set to {orientation}")
         self._set_status_style(ok=True)
         self._append_trace_log(f"Table orientation set to {orientation}")
+
+    def on_machine_home_corner_change(self, value: str) -> None:
+        corner = str(value).strip().lower()
+        if corner not in self.home_corner_options:
+            return
+
+        self.driver.update_machine_settings(my_home_corner=corner)
+        self._persist_machine_settings()
+        self._sync_machine_controls()
+        self._set_status_message(f"OK: My home set to {corner}")
+        self._set_status_style(ok=True)
+        self._append_trace_log(f"My home set to {corner}")
+
+    def on_machine_home_padding_change(self, value: float) -> None:
+        padding_mm = max(0.0, float(value))
+        self.driver.update_machine_settings(my_home_padding_mm=padding_mm)
+        self._persist_machine_settings()
+        self._sync_machine_controls()
+        self._set_status_message(
+            f"OK: Home padding set to {format_distance_mm(padding_mm)}"
+        )
+        self._set_status_style(ok=True)
+        self._append_trace_log(f"Home padding set to {format_distance_mm(padding_mm)}")
 
     def on_profile_select(self, profile_name: str) -> None:
         profile = self.settings_service.load_profile(profile_name)
@@ -908,6 +965,12 @@ class AppWindow:
 
     def on_home(self) -> None:
         self._run_manual_action_async("Home", self.driver.home)
+
+    def on_machine_physical_home(self) -> None:
+        self._run_manual_action_async("Physical Home", self.driver.home)
+
+    def on_machine_my_home(self) -> None:
+        self._run_manual_action_async("My home", self.driver.go_to_my_home)
 
     def on_center(self) -> None:
         self._run_manual_action_async("Center", self.driver.center_for_test)

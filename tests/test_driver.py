@@ -1,25 +1,24 @@
 from __future__ import annotations
 
 import pathlib
-import sys
 import tempfile
 import unittest
 from types import SimpleNamespace
+
 import yaml
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from idraw_ui.backend.driver import Driver  # noqa: E402
-from idraw_ui.backend.models import PlotProgress, PlotState  # noqa: E402
-from idraw_ui.backend.profiles import (  # noqa: E402
+from idraw_ui.backend.driver import Driver
+from idraw_ui.backend.models import (
+    MachineSettings,
+    PlotProgress,
+    PlotState,
+)
+from idraw_ui.backend.profiles import (
     load_app_state,
     load_machine_settings,
     load_plot_profile,
 )
-from idraw_ui.backend.vendor_bridge import VendorBridgeError  # noqa: E402
+from idraw_ui.backend.vendor_bridge import VendorBridgeError
 
 
 class FakeBridge:
@@ -32,6 +31,7 @@ class FakeBridge:
         self.fail_on = fail_on
         self.fail_with_runtime_on = fail_with_runtime_on
         self.connected = False
+        self.calls: list[tuple[str, tuple[object, ...]]] = []
 
     def _maybe_fail(self, op: str) -> None:
         if self.fail_with_runtime_on == op:
@@ -41,27 +41,40 @@ class FakeBridge:
 
     def connect(self) -> bool:
         self._maybe_fail("connect")
+        self.calls.append(("connect", ()))
         self.connected = True
         return True
 
     def disconnect(self) -> None:
         self._maybe_fail("disconnect")
+        self.calls.append(("disconnect", ()))
         self.connected = False
 
     def get_status(self) -> str:
         self._maybe_fail("status")
+        self.calls.append(("status", ()))
         return "<Idle|MPos:0.000,0.000,0.000>"
 
     def home(self) -> str:
         self._maybe_fail("home")
+        self.calls.append(("home", ()))
+        return "ok"
+
+    def move_relative(
+        self, x_mm: float, y_mm: float, feed_mm_min: float | None = None
+    ) -> str:
+        self._maybe_fail("move_relative")
+        self.calls.append(("move_relative", (x_mm, y_mm, feed_mm_min)))
         return "ok"
 
     def raise_pen(self) -> str:
         self._maybe_fail("raise_pen")
+        self.calls.append(("raise_pen", ()))
         return "ok"
 
     def lower_pen(self) -> str:
         self._maybe_fail("lower_pen")
+        self.calls.append(("lower_pen", ()))
         return "ok"
 
 
@@ -136,6 +149,31 @@ class DriverTests(unittest.TestCase):
         driver.connect()
         self.assertTrue(driver.raise_pen().ok)
         self.assertTrue(driver.lower_pen().ok)
+
+    def test_go_to_my_home_uses_padding(self) -> None:
+        driver = Driver(
+            machine_settings=MachineSettings(
+                machine_model="idraw-2.0",
+                table_orientation="portrait",
+                my_home_corner="top-left",
+                my_home_padding_mm=10.0,
+            ),
+            bridge=FakeBridge(),
+        )
+
+        result = driver.go_to_my_home()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            driver.bridge.calls,
+            [
+                ("connect", ()),
+                ("home", ()),
+                ("raise_pen", ()),
+                ("move_relative", (422.0, -584.0, 8000.0)),
+                ("disconnect", ()),
+            ],
+        )
 
     def test_disconnect_failure_is_reported(self) -> None:
         driver = Driver(bridge=FakeBridge(fail_on="disconnect"))

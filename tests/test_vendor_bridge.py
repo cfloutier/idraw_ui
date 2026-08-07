@@ -1,18 +1,11 @@
 from __future__ import annotations
 
-import pathlib
-import sys
 import unittest
 from unittest.mock import patch
 
 import serial
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from idraw_ui.backend.vendor_bridge import VendorBridge, VendorBridgeError  # noqa: E402
+from idraw_ui.backend.vendor_bridge import VendorBridge, VendorBridgeError
 
 
 class FakeSerial:
@@ -54,11 +47,13 @@ class VendorBridgeRobustnessTests(unittest.TestCase):
         bridge = VendorBridge(port="COM5")
         bridge._serial = FakeSerial()  # test fixture for connected state
 
-        with patch.object(
-            bridge._serial, "write", side_effect=serial.SerialException("usb gone")
+        with (
+            patch.object(
+                bridge._serial, "write", side_effect=serial.SerialException("usb gone")
+            ),
+            self.assertRaises(VendorBridgeError) as ctx,
         ):
-            with self.assertRaises(VendorBridgeError) as ctx:
-                bridge.get_status()
+            bridge.get_status()
 
         self.assertIn("Serial communication error", str(ctx.exception))
 
@@ -66,11 +61,15 @@ class VendorBridgeRobustnessTests(unittest.TestCase):
         bridge = VendorBridge(port="COM5")
         bridge._serial = FakeSerial()
 
-        with patch.object(
-            bridge._serial, "write", side_effect=serial.SerialException("write failed")
+        with (
+            patch.object(
+                bridge._serial,
+                "write",
+                side_effect=serial.SerialException("write failed"),
+            ),
+            self.assertRaises(VendorBridgeError) as ctx,
         ):
-            with self.assertRaises(VendorBridgeError) as ctx:
-                bridge.home()
+            bridge.home()
 
         self.assertIn("Serial communication error", str(ctx.exception))
 

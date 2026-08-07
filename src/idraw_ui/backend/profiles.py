@@ -13,6 +13,8 @@ _MACHINE_SETTINGS_KEYS = {
     "name",
     "machine_model",
     "table_orientation",
+    "my_home_corner",
+    "my_home_padding_mm",
     "port",
     "baudrate",
     "serial_timeout",

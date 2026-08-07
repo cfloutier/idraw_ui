@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from idraw_ui.backend.idraw2_facade import Idraw2Facade
+from idraw_ui.backend.machine_models import get_machine_model, move_delta_to_corner
 from idraw_ui.backend.models import (
     MachineSettings,
     PlotProfile,
@@ -201,6 +202,42 @@ class Driver:
             working_state=PlotState.HOMING,
             success_message="Homing completed",
             failure_prefix="Homing failed",
+        )
+
+    def go_to_my_home(self) -> DriverCommandResult:
+        def do_go_to_my_home() -> str:
+            self.bridge.home()
+            target_corner = self.machine_settings.my_home_corner.strip().lower()
+            machine = get_machine_model(self.machine_settings.machine_model)
+            if target_corner not in {
+                "top-left",
+                "top-right",
+                "bottom-right",
+                "bottom-left",
+            }:
+                target_corner = machine.physical_home
+
+            x_mm, y_mm = move_delta_to_corner(
+                machine,
+                self.machine_settings.table_orientation,
+                target_corner,
+                padding_mm=max(0.0, float(self.machine_settings.my_home_padding_mm)),
+            )
+            if abs(x_mm) < 1e-6 and abs(y_mm) < 1e-6:
+                return "already at my home"
+
+            self.bridge.raise_pen()
+            return self.bridge.move_relative(
+                x_mm=x_mm,
+                y_mm=y_mm,
+                feed_mm_min=self.plot_profile.speed_penup,
+            )
+
+        return self._run_bridge_action_with_auto_disconnect(
+            do_go_to_my_home,
+            working_state=PlotState.HOMING,
+            success_message="My home reached",
+            failure_prefix="My home failed",
         )
 
     def center_for_test(self) -> DriverCommandResult:

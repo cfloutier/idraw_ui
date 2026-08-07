@@ -1,19 +1,13 @@
 from __future__ import annotations
 
 import pathlib
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-PROJECT_ROOT = pathlib.Path(__file__).resolve().parents[1]
-SRC_DIR = PROJECT_ROOT / "src"
-if str(SRC_DIR) not in sys.path:
-    sys.path.insert(0, str(SRC_DIR))
-
-from idraw_ui.backend.idraw2_facade import Idraw2Facade  # noqa: E402
-from idraw_ui.backend.models import PlotState  # noqa: E402
+from idraw_ui.backend.idraw2_facade import Idraw2Facade
+from idraw_ui.backend.models import PlotState
 
 
 class FakeRuntime:
