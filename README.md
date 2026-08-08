@@ -52,17 +52,148 @@ python -m idraw_ui.app
 ```
 
 The UI is now built with `customtkinter` for a cleaner visual style and exposes
-the current operational workflow through five tabs:
+the current operational workflow through six tabs:
 
 - `Trace`: load or reload an SVG, start/pause/stop a plot, and access quick
-	`Home`, `Center`, `Pen Up`, and `Pen Down` actions.
+	`Home`, `Center`, `Pen Up`, and `Pen Down` actions. Its table preview shows
+	the loaded SVG placement, selected home, orientation, dimensions, and bounds.
 - `Jog`: manual homing, centering, and XY jogging.
 - `Pen`: pen height tuning and live pen tests.
 - `Draw Options`: speed, acceleration, ordering, and preview defaults.
 - `Machine`: machine model selection.
+- `Log`: diagnostic output intended for development and troubleshooting.
 
 The loaded SVG name is shown in the top bar. Operational state, timing, and
 distance metrics are consolidated in the colored footer status area.
+
+## Mandatory safety test before first use
+
+Run this procedure before using the application with a machine that has not yet
+been validated. Repeat it after adding or changing a machine model, its table
+orientation, or its axis configuration.
+
+This qualification reduces the risk of an incorrect move; it cannot guarantee
+mechanical safety. Keep the machine supervised and remain ready to stop it during
+every validation run.
+
+### Prepare the test
+
+1. Clear the whole plotter area and keep access to the emergency stop or power
+	switch.
+2. Remove the pen for the first dry run, or make certain that it stays fully
+	raised.
+3. In `Machine`, select the exact physical plotter model.
+4. Select the physical table orientation and the desired `My home` corner.
+5. With the motors disabled or the machine powered off, move the carriage by
+	hand near the center of the usable area. Do not force a powered motor.
+6. Power or enable the machine again without asking the application to perform
+	a long positioning move.
+7. In `Trace`, load `test_svg_files/_test_a6.svg`.
+8. Check the preview before pressing `Play`:
+	- the orange home marker must match the selected corner;
+	- the A6 page must appear in the expected area of the table;
+	- `OUT OF BOUNDS` must not be displayed.
+
+### Validate the selected home
+
+Start the test with the carriage near the center so there is at least one A6
+page of free travel in every direction. Be ready to press `Stop` or cut power as
+soon as the first move heads the wrong way.
+
+The drawing must extend inward from the selected visual home:
+
+| Selected `My home` | Expected drawing direction from the center |
+| --- | --- |
+| `top-left` | right and down |
+| `top-right` | left and down |
+| `bottom-left` | right and up |
+| `bottom-right` | left and up |
+
+1. Press `Play` for the dry run and verify the first moves against this table.
+2. Stop immediately if either direction is wrong or if the carriage approaches
+	a mechanical limit.
+3. If the dry run is correct, install the pen and repeat the A6 test on paper.
+4. Confirm that the page is drawn in the expected zone, the `Up` arrow points
+	toward the visual top of the table, and `A6 Test` is upright and not mirrored.
+5. Repeat the procedure for every home corner that will actually be used.
+
+Do not use the application for production plotting if this test fails. A wrong
+direction means that the selected model does not describe the physical machine,
+or that the real model is missing from the application.
+
+## Adding and validating a machine model
+
+Machine definitions live in
+`src/idraw_ui/backend/machine_models.py` inside `_MODEL_DEFINITIONS`. Do not
+silently reuse a model merely because its page size is similar: travel size,
+firmware model ID, physical home, axis assignment, and axis polarity must all
+match.
+
+### Add the definition
+
+1. Copy the closest existing `MachineModelDefinition` entry and give it a unique
+	`key` and user-facing `label`.
+2. Set `runtime_model` to the model ID expected by the vendor iDraw runtime.
+	Verify this value from the machine/vendor documentation; do not guess it.
+3. Set `width_mm` and `height_mm` to the usable travel dimensions in the
+	machine's native landscape convention. The UI swaps them for portrait display.
+4. Set `physical_home` to the visual corner reached by firmware homing in
+	portrait orientation: `top-left`, `top-right`, `bottom-left`, or
+	`bottom-right`.
+5. Set `my_home_corner` to the safest default logical home for this model.
+6. Set `long_axis_is_y` according to whether firmware Y drives the long table
+	axis.
+7. Set `x_axis_toward_home` and `y_axis_toward_home` according to whether the
+	positive firmware direction for each axis moves toward the physical home.
+8. Add legacy or alternative names to `_MODEL_ALIASES` only when they refer to
+	exactly the same physical model.
+9. Restart the application, select the new model in `Machine`, and verify that
+	the displayed table dimensions and physical-home marker match the hardware.
+
+Example structure:
+
+```python
+MachineModelDefinition(
+	 key="idraw-my-model",
+	 label="iDraw My Model",
+	 runtime_model=0,  # Replace with the verified vendor model ID.
+	 width_mm=500,
+	 height_mm=350,
+	 physical_home="bottom-right",
+	 my_home_corner="top-left",
+	 long_axis_is_y=True,
+	 x_axis_toward_home=False,
+	 y_axis_toward_home=True,
+),
+```
+
+### Calibrate and validate the definition
+
+1. Remove the pen and keep the carriage near the center.
+2. Use very short physical jogs to identify actual `+X`, `-X`, `+Y`, and `-Y`
+	directions. Correct the axis metadata if the UI preview and motion disagree.
+3. Verify `Physical Home` with enough clear travel and immediate access to the
+	stop or power control.
+4. Verify `Center` only after the physical home and jog directions are correct.
+5. Run the full A6 safety test above for portrait orientation and all homes that
+	will be supported.
+6. Validate landscape independently; do not infer it solely from portrait.
+7. Add or update tests in `tests/test_machine_models.py`, then run:
+
+```powershell
+python -m unittest tests.test_machine_models tests.test_machine_tab
+```
+
+Record the physical result in `docs/hardware_notes.md`. A model should only be
+offered as validated after its home, jog directions, center move, A6 placement,
+upright orientation, and bounds preview have all passed on real hardware.
+
+If the model cannot yet be added, report it as unsupported rather than selecting
+an approximate model. Record at least the exact product name, firmware version,
+vendor runtime model ID, usable travel dimensions, portrait physical-home
+corner, which firmware axis drives the long side, and the observed directions
+of short `+X` and `+Y` jogs from the center. These facts are required to create a
+definition that can be validated safely.
 
 ## Recent progress (Aug 2026)
 
