@@ -21,10 +21,12 @@ class JogTab:
 
         frame = ctk.CTkFrame(self.tab, corner_radius=12)
         frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        frame.grid_columnconfigure(0, weight=1)
+        frame.grid_columnconfigure(0, weight=2)  # left: jog pad + slider
+        frame.grid_columnconfigure(1, weight=1)  # right: position + margin
 
+        # ── top bar (spans both columns) ──────────────────────────────────
         nav_bar = ctk.CTkFrame(frame, fg_color="transparent")
-        nav_bar.grid(row=0, column=0, sticky="ew", padx=20, pady=(10, 8))
+        nav_bar.grid(row=0, column=0, columnspan=2, sticky="ew", padx=20, pady=(10, 8))
         nav_bar.grid_columnconfigure((0, 1), weight=1)
 
         self.window.home_button = ctk.CTkButton(
@@ -38,7 +40,7 @@ class JogTab:
         self.window.center_button.grid(row=0, column=1, sticky="ew", padx=(4, 0))
 
         mode_row = ctk.CTkFrame(frame, fg_color="transparent")
-        mode_row.grid(row=1, column=0, sticky="ew", padx=20, pady=(0, 6))
+        mode_row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=20, pady=(0, 10))
         mode_row.grid_columnconfigure(0, weight=1)
         mode_row.grid_columnconfigure(1, weight=0)
 
@@ -63,8 +65,73 @@ class JogTab:
             text_color=("#5E5E5E", "#A9A9A9"),
         ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(4, 0))
 
+        # ── right column: position display + set-margin buttons ────────────
+        left = ctk.CTkFrame(frame, fg_color="transparent")
+        left.grid(row=2, column=1, sticky="nsew", padx=(8, 20), pady=(0, 14))
+        left.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(
+            left,
+            text="Position from home",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=0, column=0, sticky="w", pady=(0, 2))
+
+        ctk.CTkLabel(
+            left,
+            textvariable=self.window.jog_position_var,
+            font=ctk.CTkFont(size=12),
+            text_color=("#5E5E5E", "#A9A9A9"),
+        ).grid(row=1, column=0, sticky="w")
+
+        ctk.CTkFrame(left, height=2, fg_color=("#C9D2DD", "#404550")).grid(
+            row=2, column=0, sticky="ew", pady=(10, 8)
+        )
+
+        ctk.CTkLabel(
+            left,
+            text="Set drawing margin",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).grid(row=3, column=0, sticky="w", pady=(0, 3))
+
+        ctk.CTkLabel(
+            left,
+            text="Go to My home · jog to a boundary · click to record",
+            font=ctk.CTkFont(size=11),
+            text_color=("#5E5E5E", "#A9A9A9"),
+            wraplength=220,
+            justify="left",
+        ).grid(row=4, column=0, sticky="w", pady=(0, 8))
+
+        btn_grid = ctk.CTkFrame(left, fg_color="transparent")
+        btn_grid.grid(row=5, column=0, sticky="ew")
+        btn_grid.grid_columnconfigure((0, 1), weight=1)
+
+        for _idx, (_label, _side) in enumerate(
+            [
+                ("Set Top", "top"),
+                ("Set Bottom", "bottom"),
+                ("Set Left", "left"),
+                ("Set Right", "right"),
+            ]
+        ):
+            _col = _idx % 2
+            _row = _idx // 2
+            ctk.CTkButton(
+                btn_grid,
+                text=_label,
+                command=lambda s=_side: self.window.on_jog_set_margin(s),
+                height=36,
+            ).grid(
+                row=_row,
+                column=_col,
+                sticky="ew",
+                padx=(0, 3) if _col == 0 else (3, 0),
+                pady=3,
+            )
+
+        # ── left column: jog pad + distance slider ───────────────────────
         jog_pad = ctk.CTkFrame(frame, fg_color="transparent")
-        jog_pad.grid(row=2, column=0, padx=24, pady=(0, 10), sticky="nw")
+        jog_pad.grid(row=2, column=0, sticky="nw", padx=(20, 0), pady=(0, 6))
         jog_pad.grid_columnconfigure((0, 1, 2), weight=0, minsize=84)
         jog_pad.grid_rowconfigure((0, 1, 2), weight=0, minsize=64)
 
@@ -89,7 +156,7 @@ class JogTab:
         self.window.jog_neg_y_button.grid(row=2, column=1, padx=3, pady=3)
 
         slider_row = ctk.CTkFrame(frame, fg_color="transparent")
-        slider_row.grid(row=3, column=0, sticky="ew", padx=20, pady=(0, 10))
+        slider_row.grid(row=3, column=0, sticky="ew", padx=(20, 0), pady=(0, 10))
         slider_row.grid_columnconfigure(0, weight=1)
         slider_row.grid_columnconfigure(1, weight=0)
 

@@ -144,19 +144,46 @@ class DriverTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertIn("failed home", result.message)
 
+    def test_home_raises_pen_before_moving(self) -> None:
+        driver = Driver(bridge=FakeBridge())
+
+        result = driver.home()
+
+        self.assertTrue(result.ok)
+        self.assertEqual(
+            driver.bridge.calls,
+            [
+                ("connect", ()),
+                ("raise_pen", ()),
+                ("home", ()),
+                ("disconnect", ()),
+            ],
+        )
+
+    def test_home_does_not_move_when_pen_raise_fails(self) -> None:
+        driver = Driver(bridge=FakeBridge(fail_on="raise_pen"))
+
+        result = driver.home()
+
+        self.assertFalse(result.ok)
+        self.assertNotIn(("home", ()), driver.bridge.calls)
+
     def test_pen_actions_success(self) -> None:
         driver = Driver(bridge=FakeBridge())
         driver.connect()
         self.assertTrue(driver.raise_pen().ok)
         self.assertTrue(driver.lower_pen().ok)
 
-    def test_go_to_my_home_uses_padding(self) -> None:
+    def test_go_to_my_home_uses_selected_corner_margins(self) -> None:
         driver = Driver(
             machine_settings=MachineSettings(
                 machine_model="idraw-2.0",
                 table_orientation="portrait",
                 my_home_corner="top-left",
-                my_home_padding_mm=10.0,
+                drawing_margin_top_mm=20,
+                drawing_margin_bottom_mm=30,
+                drawing_margin_left_mm=10,
+                drawing_margin_right_mm=40,
             ),
             bridge=FakeBridge(),
         )
@@ -168,12 +195,29 @@ class DriverTests(unittest.TestCase):
             driver.bridge.calls,
             [
                 ("connect", ()),
-                ("home", ()),
                 ("raise_pen", ()),
-                ("move_relative", (422.0, -584.0, 8000.0)),
+                ("home", ()),
+                ("move_relative", (422.0, -574.0, 8000.0)),
                 ("disconnect", ()),
             ],
         )
+
+    def test_go_to_my_home_rejects_margins_without_usable_area(self) -> None:
+        driver = Driver(
+            machine_settings=MachineSettings(
+                machine_model="idraw-a4",
+                table_orientation="landscape",
+                drawing_margin_left_mm=150,
+                drawing_margin_right_mm=150,
+            ),
+            bridge=FakeBridge(),
+        )
+
+        result = driver.go_to_my_home()
+
+        self.assertFalse(result.ok)
+        self.assertIn("no usable machine area", result.message)
+        self.assertNotIn(("home", ()), driver.bridge.calls)
 
     def test_center_for_test_uses_machine_geometry(self) -> None:
         driver = Driver(
@@ -191,8 +235,8 @@ class DriverTests(unittest.TestCase):
             driver.bridge.calls,
             [
                 ("connect", ()),
-                ("home", ()),
                 ("raise_pen", ()),
+                ("home", ()),
                 ("move_relative", (216.0, -297.0, 8000.0)),
                 ("disconnect", ()),
             ],

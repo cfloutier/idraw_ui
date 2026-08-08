@@ -1,6 +1,6 @@
 active_profile: bic
-active_tab: Trace
+active_tab: Draw Options
 jog_distance_mm: 10.0
-jog_mode: table
+jog_mode: physical
 last_folder: C:\dev\__tracer\idraw_ui\test_svg_files
 last_svg_file: C:\dev\__tracer\idraw_ui\test_svg_files\_test_spirale.svg

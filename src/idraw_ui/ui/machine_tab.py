@@ -9,7 +9,6 @@ from idraw_ui.backend.machine_models import (
     display_axis_vectors,
     display_home_corner,
 )
-from idraw_ui.ui.tools import format_distance_mm
 
 _CANVAS_WIDTH = 420
 _CANVAS_HEIGHT = 360
@@ -95,39 +94,49 @@ class MachineTab:
             width=240,
         ).grid(row=7, column=0, sticky="w", padx=8, pady=(0, 6))
 
-        padding_box = ctk.CTkFrame(frame, fg_color="transparent")
-        padding_box.grid(row=8, column=0, sticky="ew", padx=8, pady=(0, 8))
-        padding_box.grid_columnconfigure(0, weight=1)
-        padding_box.grid_columnconfigure(1, weight=0)
+        margins_box = ctk.CTkFrame(frame, fg_color="transparent")
+        margins_box.grid(row=8, column=0, sticky="ew", padx=8, pady=(0, 8))
+        margins_box.grid_columnconfigure((0, 1), weight=1)
 
         ctk.CTkLabel(
-            padding_box,
-            text="Padding",
+            margins_box,
+            text="Drawing margins (mm)",
             font=ctk.CTkFont(size=13, weight="bold"),
-        ).grid(row=0, column=0, sticky="w")
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
 
-        padding_value_var = tk.StringVar(
-            value=format_distance_mm(self.window.machine_home_padding_var.get())
-        )
-
-        def on_padding_change(value: float) -> None:
-            padding_value_var.set(format_distance_mm(value))
-            self.window.on_machine_home_padding_change(value)
-
-        ctk.CTkLabel(
-            padding_box,
-            textvariable=padding_value_var,
-            font=ctk.CTkFont(size=12),
-        ).grid(row=0, column=1, sticky="e")
-
-        ctk.CTkSlider(
-            padding_box,
-            from_=0.0,
-            to=50.0,
-            variable=self.window.machine_home_padding_var,
-            command=on_padding_change,
-            number_of_steps=50,
-        ).grid(row=1, column=0, columnspan=2, sticky="ew", pady=(2, 0))
+        validate_integer = (self.tab.register(self._is_valid_margin_input), "%P")
+        for index, side in enumerate(("top", "bottom", "left", "right")):
+            row = 1 + (index // 2)
+            column = index % 2
+            field = ctk.CTkFrame(margins_box, fg_color="transparent")
+            field.grid(
+                row=row,
+                column=column,
+                sticky="ew",
+                padx=(0, 4) if column == 0 else (4, 0),
+                pady=(4, 0),
+            )
+            field.grid_columnconfigure(1, weight=1)
+            ctk.CTkLabel(field, text=side.title(), width=48, anchor="w").grid(
+                row=0, column=0, sticky="w"
+            )
+            entry = ctk.CTkEntry(
+                field,
+                textvariable=self.window.machine_margin_vars[side],
+                validate="key",
+                validatecommand=validate_integer,
+                justify="right",
+                width=64,
+            )
+            entry.grid(row=0, column=1, sticky="ew")
+            entry.bind(
+                "<Return>",
+                lambda _event, margin_side=side: self._commit_margin(margin_side),
+            )
+            entry.bind(
+                "<FocusOut>",
+                lambda _event, margin_side=side: self._commit_margin(margin_side),
+            )
 
         home_actions = ctk.CTkFrame(frame, fg_color="transparent")
         home_actions.grid(row=9, column=0, sticky="ew", padx=8, pady=(0, 8))
@@ -222,10 +231,19 @@ class MachineTab:
         self.window.machine_home_corner_var.trace_add(
             "write", self._on_machine_model_var_changed
         )
-        self.window.machine_home_padding_var.trace_add(
-            "write", self._on_machine_model_var_changed
-        )
+        for variable in self.window.machine_margin_vars.values():
+            variable.trace_add("write", self._on_machine_model_var_changed)
         self._redraw_table_preview()
+
+    @staticmethod
+    def _is_valid_margin_input(value: str) -> bool:
+        return value == "" or value.isdecimal()
+
+    def _commit_margin(self, side: str) -> None:
+        self.window.on_machine_margin_change(
+            side,
+            self.window.machine_margin_vars[side].get(),
+        )
 
     def _open_home_corner_dialog(self) -> None:
         if self._home_dialog is not None and self._home_dialog.winfo_exists():
@@ -472,29 +490,35 @@ class MachineTab:
             model, orientation
         )
         selected_home_corner = self.window.machine_home_corner_var.get().strip().lower()
-        padding_mm = max(0.0, float(self.window.machine_home_padding_var.get()))
-        safe_inset = min(
-            padding_mm * scale,
-            max(0.0, rect_width / 2.0 - 6),
-            max(0.0, rect_height / 2.0 - 6),
-        )
-        if safe_inset > 0.0:
+        margins = {
+            side: self._margin_value(side)
+            for side in ("top", "bottom", "left", "right")
+        }
+        safe_left = left + min(margins["left"] * scale, rect_width)
+        safe_right = right - min(margins["right"] * scale, rect_width)
+        safe_top = top + min(margins["top"] * scale, rect_height)
+        safe_bottom = bottom - min(margins["bottom"] * scale, rect_height)
+        margins_valid = safe_left < safe_right and safe_top < safe_bottom
+        if any(margins.values()):
             canvas.create_rectangle(
-                left + safe_inset,
-                top + safe_inset,
-                right - safe_inset,
-                bottom - safe_inset,
-                outline="#3A7BD5",
-                width=1,
+                safe_left,
+                safe_top,
+                safe_right,
+                safe_bottom,
+                outline="#3A7BD5" if margins_valid else "#B42318",
+                width=2 if not margins_valid else 1,
                 dash=(4, 3),
                 tags=("preview",),
             )
             canvas.create_text(
-                left + safe_inset + 10,
-                top + safe_inset + 10,
-                text=f"Padding {format_distance_mm(padding_mm)}",
-                anchor="nw",
-                fill="#3A7BD5",
+                (left + right) / 2.0,
+                bottom - 6,
+                text=(
+                    f"T{margins['top']}  B{margins['bottom']}  "
+                    f"L{margins['left']}  R{margins['right']} mm"
+                ),
+                anchor="s",
+                fill="#3A7BD5" if margins_valid else "#B42318",
                 font=("Segoe UI", 9, "bold"),
                 tags=("preview",),
             )
@@ -511,16 +535,18 @@ class MachineTab:
             )
             is_left = "left" in label.lower()
             is_top = "top" in label.lower()
-            text_x = x - 10 if is_left else x
-            if is_left and is_top:
-                anchor = "se"
-            elif is_left:
-                anchor = "ne"
-            elif is_top:
-                anchor = "sw"
-            else:
-                anchor = "nw"
-            text_y = y + 10 if "Bottom" in label else y - 10
+            # labels drawn INSIDE the rect so they never clip at canvas edges
+            text_x = x + 8 if is_left else x - 8
+            text_y = y + 8 if is_top else y - 8
+            anchor = (
+                "nw"
+                if (is_left and is_top)
+                else "ne"
+                if (not is_left and is_top)
+                else "sw"
+                if is_left
+                else "se"
+            )
             canvas.create_text(
                 text_x,
                 text_y,
@@ -542,10 +568,16 @@ class MachineTab:
                     width=3,
                     tags=("preview",),
                 )
-                home_label_x = x - 18 if is_left else x + 18
-                home_label_y = y - 18 if is_top else y - 26
+                home_label_x = x + 20 if is_left else x - 20
+                home_label_y = y + 20 if is_top else y - 20
                 home_anchor = (
-                    "se" if (is_left and is_top) else ("ne" if is_left else "sw")
+                    "nw"
+                    if (is_left and is_top)
+                    else "ne"
+                    if (not is_left and is_top)
+                    else "sw"
+                    if is_left
+                    else "se"
                 )
                 canvas.create_text(
                     home_label_x,
@@ -558,8 +590,8 @@ class MachineTab:
                 )
 
             if corner_key == selected_home_corner:
-                marker_x = left + safe_inset if is_left else right - safe_inset
-                marker_y = top + safe_inset if is_top else bottom - safe_inset
+                marker_x = safe_left if is_left else safe_right
+                marker_y = safe_top if is_top else safe_bottom
                 canvas.create_oval(
                     marker_x - 11,
                     marker_y - 11,
@@ -569,12 +601,17 @@ class MachineTab:
                     width=3,
                     tags=("preview",),
                 )
-                my_home_label_x = marker_x + 18 if is_left else marker_x - 18
-                my_home_label_y = marker_y + 18 if is_top else marker_y - 18
+
+                my_home_label_x = marker_x + 14 if is_left else marker_x - 14
+                my_home_label_y = marker_y + 14 if is_top else marker_y - 14
                 my_home_anchor = (
-                    "sw"
+                    "nw"
                     if (is_left and is_top)
-                    else ("se" if is_top else ("nw" if is_left else "ne"))
+                    else "ne"
+                    if (not is_left and is_top)
+                    else "sw"
+                    if is_left
+                    else "se"
                 )
                 canvas.create_text(
                     my_home_label_x,
@@ -645,3 +682,7 @@ class MachineTab:
                 target_center_x - bbox_center_x,
                 target_center_y - bbox_center_y,
             )
+
+    def _margin_value(self, side: str) -> int:
+        value = self.window.machine_margin_vars[side].get()
+        return int(value) if value.isdecimal() else 0

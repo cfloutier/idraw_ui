@@ -20,7 +20,10 @@ class MachineSettings:
     machine_model: str = "idraw-2.0"
     table_orientation: str = "landscape"
     my_home_corner: str = "top-left"
-    my_home_padding_mm: float = 10.0
+    drawing_margin_top_mm: int = 10
+    drawing_margin_bottom_mm: int = 10
+    drawing_margin_left_mm: int = 10
+    drawing_margin_right_mm: int = 10
     port: str | None = None
     baudrate: int = 115200
     serial_timeout: float = 1.0
@@ -36,9 +39,7 @@ class PlotProfile:
     speed_penup: float = 8000.0
     speed_pendown: float = 2000.0
     accel: float = 75.0
-    auto_rotate: bool = True
     reordering: int = 0
-    preview: bool = False
     digest: int = 1
     pen_up_command: str | None = None
     pen_down_command: str | None = None

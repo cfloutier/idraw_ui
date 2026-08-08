@@ -42,15 +42,16 @@ Additional behavior now in place:
   geometry source of truth.
 - Logical home support is implemented with:
   - `my_home_corner`
-  - `my_home_padding_mm`
+  - `drawing_margin_top_mm`, `drawing_margin_bottom_mm`
+  - `drawing_margin_left_mm`, `drawing_margin_right_mm`
   - `go_to_my_home()` movement built from machine geometry
 - Centering for test moves now uses machine geometry
   (`move_delta_to_center`) instead of fixed deltas.
 - Machine tab now renders and controls:
   - table orientation
   - selected logical home corner
-  - configurable safety padding in mm
-  - preview markers for physical home, logical home, and padded inset area
+  - four integer drawing margins in mm
+  - preview markers for physical home, logical home, and usable inset area
   - explanatory copy: orientation means physical placement on table and affects jog
 - Jog tab now has two operational modes:
   - physical axis mode (`+X/-X/+Y/-Y`)
@@ -108,7 +109,7 @@ Current UI shape:
   persisted jog mode selection.
 - `Pen`: pen height tuning, live apply toggle, reset, and pen test actions.
 - `Draw Options`: speed/acceleration and plot options merged into one page.
-- `Machine`: machine model, table orientation, logical home corner, home padding,
+- `Machine`: machine model, table orientation, logical home corner, four drawing margins,
   and geometry preview.
 
 ## Architecture choices kept for continuity

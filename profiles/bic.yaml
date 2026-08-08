@@ -1,5 +1,4 @@
 accel: 61.9639534883721
-auto_rotate: true
 digest: 1
 name: bic
 pen_down_command: null
@@ -7,7 +6,6 @@ pen_down_height: 8.181818181818182
 pen_move_speed: null
 pen_up_command: null
 pen_up_height: 2.697947214076246
-preview: false
 reordering: 0
 speed_pendown: 1822.654867256637
 speed_penup: 8532.743362831858

@@ -38,14 +38,7 @@ class OptionsTab:
 
         ctk.CTkSwitch(
             frame,
-            text="Auto rotate to fit the page",
-            variable=self.window.auto_rotate_var,
-            command=self.window.on_options_change,
-        ).grid(row=2, column=0, sticky="w", padx=16, pady=6)
-
-        ctk.CTkSwitch(
-            frame,
             text="Preview mode by default",
             variable=self.window.preview_var,
             command=self.window.on_options_change,
-        ).grid(row=3, column=0, sticky="w", padx=16, pady=6)
+        ).grid(row=2, column=0, sticky="w", padx=16, pady=6)

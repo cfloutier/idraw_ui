@@ -13,6 +13,10 @@ _MACHINE_SETTINGS_KEYS = {
     "machine_model",
     "table_orientation",
     "my_home_corner",
+    "drawing_margin_top_mm",
+    "drawing_margin_bottom_mm",
+    "drawing_margin_left_mm",
+    "drawing_margin_right_mm",
     "my_home_padding_mm",
     "port",
     "baudrate",
@@ -28,9 +32,7 @@ _PLOT_PROFILE_KEYS = {
     "speed_penup",
     "speed_pendown",
     "accel",
-    "auto_rotate",
     "reordering",
-    "preview",
     "digest",
     "pen_up_command",
     "pen_down_command",
@@ -71,6 +73,19 @@ def _split_known_keys(
 
 def machine_settings_from_mapping(data: Mapping[str, Any]) -> MachineSettings:
     values = _split_known_keys(data, _MACHINE_SETTINGS_KEYS, kind="machine settings")
+    legacy_padding = values.pop("my_home_padding_mm", None)
+    margin_keys = (
+        "drawing_margin_top_mm",
+        "drawing_margin_bottom_mm",
+        "drawing_margin_left_mm",
+        "drawing_margin_right_mm",
+    )
+    if legacy_padding is not None:
+        for key in margin_keys:
+            values.setdefault(key, round(float(legacy_padding)))
+    for key in margin_keys:
+        if key in values:
+            values[key] = max(0, round(float(values[key])))
     return MachineSettings(**values)
 
 

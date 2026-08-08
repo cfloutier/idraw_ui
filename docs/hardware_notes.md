@@ -220,3 +220,37 @@ Validation:
   content. The corrected portrait mapping is physically validated.
 - Landscape behavior and explicit large-SVG bounds protection remain separate,
   unvalidated follow-up work.
+
+## 2026-08-08 - Landscape validation
+
+Setup: A1 machine, landscape table orientation, A6 test SVG, pen near center.
+Physical home confirmed at bottom-left, jog axes confirmed matching the Machine
+page display (X+=up, Y+=left).
+
+Issues encountered and resolved:
+- SVG content 90° rotated: vendor `auto_rotate=True` was rotating the portrait
+  A6 SVG to landscape internally; combined with our X+Y correction this
+  produced a net 90° error. Fix: force `auto_rotate=False` for landscape only.
+- SVG content 180° rotated: in landscape the raw vendor digest arrives already
+  upright (no 180° rotation); our portrait X+Y correction was being applied
+  incorrectly. Fix: skip the global X+Y correction when orientation=landscape.
+- Wrong drawing zone for bottom-right and top-left: the start_pos formula
+  (mirror_x/mirror_y) derived for portrait does not directly apply to landscape
+  because the machine axes are 90° rotated. Fix: for landscape,
+  `(mirror_x, mirror_y) = (portrait_mirror_y, NOT portrait_mirror_x)`,
+  which maps "right"→mirror_x and "bottom"→mirror_y instead of "top"/"right".
+
+Final validated landscape results with A1 + A6 test SVG:
+  - `top-left`: lower-right ✓
+  - `top-right`: lower-left ✓
+  - `bottom-left`: upper-right ✓
+  - `bottom-right`: upper-left ✓
+
+Both portrait and landscape are now fully validated for all four logical home
+corners. Content appears upright and non-reflected in both orientations.
+
+Runtime rules now in effect:
+- Portrait: `auto_rotate=True`, global X+Y correction applied.
+- Landscape: `auto_rotate=False`, global X+Y correction skipped.
+- start_pos formula: portrait uses `logical_home_mirror_axes` directly;
+  landscape swaps and inverts: `(mirror_y, NOT mirror_x)`.

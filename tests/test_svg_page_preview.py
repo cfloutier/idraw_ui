@@ -52,10 +52,10 @@ class SvgPageSizeTests(unittest.TestCase):
 
     def test_places_page_inward_from_each_home(self) -> None:
         expected = {
-            "top-left": (10.0, 10.0, 110.0, 60.0),
-            "top-right": (190.0, 10.0, 290.0, 60.0),
-            "bottom-left": (10.0, 140.0, 110.0, 190.0),
-            "bottom-right": (190.0, 140.0, 290.0, 190.0),
+            "top-left": (30.0, 10.0, 130.0, 60.0),
+            "top-right": (160.0, 10.0, 260.0, 60.0),
+            "bottom-left": (30.0, 130.0, 130.0, 180.0),
+            "bottom-right": (160.0, 130.0, 260.0, 180.0),
         }
 
         for home_corner, coordinates in expected.items():
@@ -66,7 +66,10 @@ class SvgPageSizeTests(unittest.TestCase):
                     page_width=100.0,
                     page_height=50.0,
                     home_corner=home_corner,
-                    padding=10.0,
+                    margin_top=10.0,
+                    margin_bottom=20.0,
+                    margin_left=30.0,
+                    margin_right=40.0,
                 )
 
                 self.assertEqual(
@@ -86,10 +89,22 @@ class SvgPageSizeTests(unittest.TestCase):
             page_width=310.0,
             page_height=100.0,
             home_corner="top-left",
-            padding=10.0,
+            margin_top=10.0,
+            margin_bottom=20.0,
+            margin_left=30.0,
+            margin_right=40.0,
         )
 
-        self.assertFalse(placement.fits_within(300.0, 200.0))
+        self.assertFalse(
+            placement.fits_within(
+                300.0,
+                200.0,
+                margin_top=10.0,
+                margin_bottom=20.0,
+                margin_left=30.0,
+                margin_right=40.0,
+            )
+        )
 
 
 if __name__ == "__main__":

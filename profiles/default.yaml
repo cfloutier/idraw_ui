@@ -1,5 +1,4 @@
 accel: 75.0
-auto_rotate: true
 digest: 1
 name: default
 pen_down_command: null
@@ -7,7 +6,6 @@ pen_down_height: 5.0
 pen_move_speed: null
 pen_up_command: null
 pen_up_height: 1.455026455026455
-preview: false
 reordering: 0
 speed_pendown: 2000.0
 speed_penup: 8000.0

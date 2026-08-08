@@ -43,17 +43,35 @@ class TraceTab:
             row=0, column=1, sticky="e", padx=(3, 6), pady=(6, 3)
         )
 
+        order_row = ctk.CTkFrame(controls, fg_color="transparent")
+        order_row.grid(row=1, column=0, columnspan=2, sticky="ew", padx=6, pady=(4, 0))
+        order_row.grid_columnconfigure(1, weight=1)
+        ctk.CTkLabel(order_row, text="Reordering", font=ctk.CTkFont(size=12)).grid(
+            row=0, column=0, sticky="w", padx=(2, 8)
+        )
+        ctk.CTkOptionMenu(
+            order_row,
+            values=[
+                self.window._reordering_label(0),
+                self.window._reordering_label(1),
+                self.window._reordering_label(2),
+                self.window._reordering_label(4),
+            ],
+            variable=self.window.reordering_var,
+            command=self.window.on_reordering_change,
+        ).grid(row=0, column=1, sticky="ew")
+
         top_separator = ctk.CTkFrame(
             controls,
             height=2,
             fg_color=("#C9D2DD", "#404550"),
         )
         top_separator.grid(
-            row=1, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 8)
+            row=2, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 8)
         )
 
         run_bar = ctk.CTkFrame(controls, fg_color="transparent")
-        run_bar.grid(row=2, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 3))
+        run_bar.grid(row=3, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 3))
         run_bar.grid_columnconfigure(0, weight=1)
         run_bar.grid_columnconfigure(1, weight=0, minsize=8)
         run_bar.grid_columnconfigure(2, weight=1)
@@ -92,18 +110,18 @@ class TraceTab:
 
         separator = ctk.CTkFrame(controls, height=2, fg_color=("#C9D2DD", "#404550"))
         separator.grid(
-            row=3, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 8)
+            row=4, column=0, columnspan=2, sticky="ew", padx=10, pady=(10, 8)
         )
 
         quick_controls = ctk.CTkFrame(controls, fg_color="transparent")
         quick_controls.grid(
-            row=4, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 3)
+            row=5, column=0, columnspan=2, sticky="ew", padx=6, pady=(0, 3)
         )
         quick_controls.grid_columnconfigure((0, 1), weight=1)
 
         self.window.trace_home_button = ctk.CTkButton(
             quick_controls,
-            text="Home",
+            text="My home",
             command=self.window.on_home,
             height=40,
         )

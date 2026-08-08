@@ -173,7 +173,10 @@ def corner_delta_from_home(
     *,
     width_mm: float,
     height_mm: float,
-    padding_mm: float = 0.0,
+    margin_top_mm: float = 0.0,
+    margin_bottom_mm: float = 0.0,
+    margin_left_mm: float = 0.0,
+    margin_right_mm: float = 0.0,
 ) -> tuple[float, float]:
     home_x = -1.0 if "left" in home_corner else 1.0
     home_y = -1.0 if "top" in home_corner else 1.0
@@ -186,9 +189,16 @@ def corner_delta_from_home(
     delta_y = (
         0.0 if target_y == home_y else (height_mm if target_y > home_y else -height_mm)
     )
-    if padding_mm > 0.0:
-        delta_x += padding_mm if "left" in target_corner else -padding_mm
-        delta_y += padding_mm if "top" in target_corner else -padding_mm
+    delta_x += (
+        max(0.0, margin_left_mm)
+        if "left" in target_corner
+        else -max(0.0, margin_right_mm)
+    )
+    delta_y += (
+        max(0.0, margin_top_mm)
+        if "top" in target_corner
+        else -max(0.0, margin_bottom_mm)
+    )
     return delta_x, delta_y
 
 
@@ -197,7 +207,10 @@ def move_delta_to_corner(
     display_orientation: str,
     target_corner: str,
     *,
-    padding_mm: float = 0.0,
+    margin_top_mm: float = 0.0,
+    margin_bottom_mm: float = 0.0,
+    margin_left_mm: float = 0.0,
+    margin_right_mm: float = 0.0,
 ) -> tuple[float, float]:
     orientation = display_orientation.strip().lower()
     display_width_mm = model.height_mm if orientation == "portrait" else model.width_mm
@@ -208,7 +221,10 @@ def move_delta_to_corner(
         target_corner,
         width_mm=display_width_mm,
         height_mm=display_height_mm,
-        padding_mm=padding_mm,
+        margin_top_mm=margin_top_mm,
+        margin_bottom_mm=margin_bottom_mm,
+        margin_left_mm=margin_left_mm,
+        margin_right_mm=margin_right_mm,
     )
     x_axis, y_axis = display_axis_vectors(model, orientation)
     x_mm = (delta_x * x_axis[0]) + (delta_y * x_axis[1])

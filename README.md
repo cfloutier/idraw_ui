@@ -55,7 +55,7 @@ The UI is now built with `customtkinter` for a cleaner visual style and exposes
 the current operational workflow through six tabs:
 
 - `Trace`: load or reload an SVG, start/pause/stop a plot, and access quick
-	`Home`, `Center`, `Pen Up`, and `Pen Down` actions. Its table preview shows
+	`My home`, `Center`, `Pen Up`, and `Pen Down` actions. Its table preview shows
 	the loaded SVG placement, selected home, orientation, dimensions, and bounds.
 - `Jog`: manual homing, centering, and XY jogging.
 - `Pen`: pen height tuning and live pen tests.
@@ -75,6 +75,11 @@ orientation, or its axis configuration.
 This qualification reduces the risk of an incorrect move; it cannot guarantee
 mechanical safety. Keep the machine supervised and remain ready to stop it during
 every validation run.
+
+Every application `Home`, `My home`, and `Center` action sends `Pen Up` before
+starting the homing move. If raising the pen fails, the movement is aborted. Do
+not bypass that failure: raise the pen manually with the machine stopped, then
+diagnose the pen command before trying again.
 
 ### Prepare the test
 
@@ -203,13 +208,13 @@ The following behavior is now implemented in the MVP UI and backend:
 	(`long_axis_is_y`, `x_axis_toward_home`, `y_axis_toward_home`).
 - `Home` semantics are split clearly:
 	- `Physical Home`: firmware/microswitch home.
-	- `My home`: selected corner plus configurable safety padding.
+	- `My home`: selected corner plus four configurable drawing margins.
 - `Center` now computes a real machine center move from machine geometry
 	and table orientation.
 - Machine tab now includes:
 	- `My home` corner selector.
-	- Home padding slider (mm).
-	- Preview rendering for physical home, selected home, and padded inset area.
+	- Integer top, bottom, left, and right drawing margins (mm).
+	- Preview rendering for physical home, selected home, and the usable inset area.
 	- Orientation helper text clarifying this is the physical placement of the
 		plotter on the table and that it affects jog directions.
 - Jog tab now includes two modes:
@@ -300,6 +305,10 @@ Example:
 ```yaml
 baudrate: 115200
 digest: 1
+drawing_margin_bottom_mm: 10
+drawing_margin_left_mm: 10
+drawing_margin_right_mm: 10
+drawing_margin_top_mm: 10
 machine_model: idraw-a1
 name: machine-default
 port: null

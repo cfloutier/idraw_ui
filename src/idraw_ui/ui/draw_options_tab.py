@@ -4,7 +4,7 @@ import customtkinter as ctk
 
 
 class DrawOptionsTab:
-    """Combined speed and plot options controls."""
+    """Speed controls."""
 
     def __init__(self, window, tab: ctk.CTkFrame) -> None:
         self.window = window
@@ -12,12 +12,11 @@ class DrawOptionsTab:
         self.build()
 
     def build(self) -> None:
-        self.tab.grid_columnconfigure(0, weight=2)
-        self.tab.grid_columnconfigure(1, weight=1)
+        self.tab.grid_columnconfigure(0, weight=1)
         self.tab.grid_rowconfigure(0, weight=1)
 
         speed_frame = ctk.CTkFrame(self.tab, corner_radius=12)
-        speed_frame.grid(row=0, column=0, sticky="nsew", padx=(4, 2), pady=4)
+        speed_frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
         speed_frame.grid_columnconfigure(0, weight=1)
 
         speed_header = ctk.CTkFrame(speed_frame, fg_color="transparent")
@@ -68,40 +67,3 @@ class DrawOptionsTab:
             from_=1.0,
             to=110.0,
         )
-
-        options_frame = ctk.CTkFrame(self.tab, corner_radius=12)
-        options_frame.grid(row=0, column=1, sticky="nsew", padx=(2, 4), pady=4)
-        options_frame.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(
-            options_frame,
-            text="Plot Options",
-            font=ctk.CTkFont(size=18, weight="bold"),
-        ).grid(row=0, column=0, sticky="w", padx=8, pady=(6, 4))
-
-        ordering = ctk.CTkOptionMenu(
-            options_frame,
-            values=[
-                self.window._reordering_label(0),
-                self.window._reordering_label(1),
-                self.window._reordering_label(2),
-                self.window._reordering_label(4),
-            ],
-            variable=self.window.reordering_var,
-            command=self.window.on_reordering_change,
-        )
-        ordering.grid(row=1, column=0, sticky="w", padx=8, pady=3)
-
-        ctk.CTkSwitch(
-            options_frame,
-            text="Auto rotate to fit the page",
-            variable=self.window.auto_rotate_var,
-            command=self.window.on_options_change,
-        ).grid(row=2, column=0, sticky="w", padx=8, pady=3)
-
-        ctk.CTkSwitch(
-            options_frame,
-            text="Preview mode by default",
-            variable=self.window.preview_var,
-            command=self.window.on_options_change,
-        ).grid(row=3, column=0, sticky="w", padx=8, pady=3)

@@ -18,18 +18,13 @@ def test_list_machine_models_returns_ui_models() -> None:
         "idraw-a2",
         "idraw-a1",
         "idraw-a0",
-        "idraw-lab-reverse",
     ]
     assert models[0].width_mm == 300
     assert models[0].physical_home == "bottom-right"
     assert models[0].long_axis_is_y is True
     assert models[0].x_axis_toward_home is False
     assert models[0].y_axis_toward_home is True
-    assert models[-2].height_mm == 841
-    assert models[-1].physical_home == "bottom-left"
-    assert models[-1].long_axis_is_y is False
-    assert models[-1].x_axis_toward_home is True
-    assert models[-1].y_axis_toward_home is False
+    assert models[-1].height_mm == 841
 
 
 def test_get_machine_model_supports_legacy_aliases() -> None:
@@ -38,23 +33,25 @@ def test_get_machine_model_supports_legacy_aliases() -> None:
     assert get_machine_model("iDraw A3").runtime_model == 2
 
 
-def test_move_delta_to_corner_applies_padding() -> None:
+def test_move_delta_to_corner_applies_selected_corner_margins() -> None:
     model = get_machine_model("idraw-a2")
 
-    padded = move_delta_to_corner(
+    margined = move_delta_to_corner(
         model,
         "portrait",
         "top-left",
-        padding_mm=10.0,
+        margin_top_mm=20.0,
+        margin_bottom_mm=30.0,
+        margin_left_mm=10.0,
+        margin_right_mm=40.0,
     )
     exact = move_delta_to_corner(
         model,
         "portrait",
         "top-left",
-        padding_mm=0.0,
     )
 
-    assert padded == (422.0, -584.0)
+    assert margined == (422.0, -574.0)
     assert exact == (432.0, -594.0)
 
 

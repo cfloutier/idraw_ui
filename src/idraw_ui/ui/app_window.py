@@ -14,6 +14,7 @@ import customtkinter as ctk
 from idraw_ui.backend.driver import Driver, DriverCommandResult
 from idraw_ui.backend.machine_models import (
     MACHINE_HOME_CORNERS,
+    display_axis_vectors,
     get_machine_model,
     list_machine_models,
     table_relative_jog_vector,
@@ -29,7 +30,6 @@ from idraw_ui.ui.progress_bar import ProgressBar
 from idraw_ui.ui.svg_page_preview import SvgPagePreview
 from idraw_ui.ui.tools import (
     _mm_min_to_inch_s,
-    format_distance_mm,
     format_duration,
     format_float,
 )
@@ -75,9 +75,20 @@ class AppWindow:
         self.machine_home_corner_var = tk.StringVar(
             value=self.driver.machine_settings.my_home_corner
         )
-        self.machine_home_padding_var = tk.DoubleVar(
-            value=self.driver.machine_settings.my_home_padding_mm
-        )
+        self.machine_margin_vars = {
+            "top": tk.StringVar(
+                value=str(self.driver.machine_settings.drawing_margin_top_mm)
+            ),
+            "bottom": tk.StringVar(
+                value=str(self.driver.machine_settings.drawing_margin_bottom_mm)
+            ),
+            "left": tk.StringVar(
+                value=str(self.driver.machine_settings.drawing_margin_left_mm)
+            ),
+            "right": tk.StringVar(
+                value=str(self.driver.machine_settings.drawing_margin_right_mm)
+            ),
+        }
         self.machine_size_var = tk.StringVar(
             value=f"{selected_machine.width_mm} x {selected_machine.height_mm} mm"
         )
@@ -95,6 +106,10 @@ class AppWindow:
         self.jog_distance_var = tk.DoubleVar(
             value=self.settings_service.app_state.jog_distance_mm
         )
+        self.jog_position_var = tk.StringVar(value="—")
+        self._jog_ref_valid = False
+        self._jog_accu_x = 0.0  # machine-coord accumulator since last My home
+        self._jog_accu_y = 0.0
         saved_jog_mode = self.settings_service.app_state.jog_mode.strip().lower()
         if saved_jog_mode not in {"physical", "table"}:
             saved_jog_mode = "physical"
@@ -105,8 +120,6 @@ class AppWindow:
         self.reordering_var = tk.StringVar(
             value=self._reordering_label(self.driver.plot_profile.reordering)
         )
-        self.auto_rotate_var = tk.BooleanVar(value=self.driver.plot_profile.auto_rotate)
-        self.preview_var = tk.BooleanVar(value=self.driver.plot_profile.preview)
 
         self.status_label: ctk.CTkLabel | None = None
         self.profile_selector: ctk.CTkOptionMenu | None = None
@@ -194,6 +207,13 @@ class AppWindow:
         self._build_log_tab(self.tabs.tab("Log"))
         self._build_footer_status(root_frame)
         self._restore_active_tab()
+        for _key, _dir in (
+            ("<Left>", "left"),
+            ("<Right>", "right"),
+            ("<Up>", "up"),
+            ("<Down>", "down"),
+        ):
+            self.root.bind(_key, lambda _e, d=_dir: self.on_keyboard_jog(d))
 
     def _build_footer_status(self, parent: ctk.CTkFrame) -> None:
         footer = ctk.CTkFrame(parent, corner_radius=12)
@@ -569,6 +589,7 @@ class AppWindow:
                 if ((is_drawing or is_paused or is_manual) and not is_loading)
                 else "disabled"
             )
+        self._update_jog_position_display()
 
     def _poll_progress(self) -> None:
         self._refresh_view()
@@ -616,11 +637,13 @@ class AppWindow:
         self.machine_model_var.set(machine.label)
         self.table_orientation_var.set(self.driver.machine_settings.table_orientation)
         self.machine_home_corner_var.set(self.driver.machine_settings.my_home_corner)
-        self.machine_home_padding_var.set(
-            self.driver.machine_settings.my_home_padding_mm
-        )
+        for side, variable in self.machine_margin_vars.items():
+            variable.set(
+                str(getattr(self.driver.machine_settings, f"drawing_margin_{side}_mm"))
+            )
         self.machine_size_var.set(f"{machine.width_mm} x {machine.height_mm} mm")
         self._sync_svg_page_preview()
+        self._update_jog_position_display()
 
     def _sync_svg_page_preview(self) -> None:
         if self.svg_page_preview is None:
@@ -637,7 +660,10 @@ class AppWindow:
             width_mm=width_mm,
             height_mm=height_mm,
             home_corner=self.driver.machine_settings.my_home_corner,
-            padding_mm=self.driver.machine_settings.my_home_padding_mm,
+            margin_top_mm=self.driver.machine_settings.drawing_margin_top_mm,
+            margin_bottom_mm=self.driver.machine_settings.drawing_margin_bottom_mm,
+            margin_left_mm=self.driver.machine_settings.drawing_margin_left_mm,
+            margin_right_mm=self.driver.machine_settings.drawing_margin_right_mm,
         )
 
     def on_svg_page_fit_change(self, fits_table: bool | None) -> None:
@@ -733,16 +759,17 @@ class AppWindow:
         self._set_status_style(ok=True)
         self._append_trace_log(f"My home set to {corner}")
 
-    def on_machine_home_padding_change(self, value: float) -> None:
-        padding_mm = max(0.0, float(value))
-        self.driver.update_machine_settings(my_home_padding_mm=padding_mm)
+    def on_machine_margin_change(self, side: str, value: str) -> None:
+        if side not in self.machine_margin_vars or not value.isdecimal():
+            self._sync_machine_controls()
+            return
+        margin_mm = int(value)
+        self.driver.update_machine_settings(**{f"drawing_margin_{side}_mm": margin_mm})
         self._persist_machine_settings()
         self._sync_machine_controls()
-        self._set_status_message(
-            f"OK: Home padding set to {format_distance_mm(padding_mm)}"
-        )
+        self._set_status_message(f"OK: {side.title()} margin set to {margin_mm} mm")
         self._set_status_style(ok=True)
-        self._append_trace_log(f"Home padding set to {format_distance_mm(padding_mm)}")
+        self._append_trace_log(f"{side.title()} margin set to {margin_mm} mm")
 
     def on_profile_select(self, profile_name: str) -> None:
         profile = self.settings_service.load_profile(profile_name)
@@ -828,9 +855,7 @@ class AppWindow:
             "speed_penup": profile.speed_penup,
             "speed_pendown": profile.speed_pendown,
             "accel": profile.accel,
-            "auto_rotate": profile.auto_rotate,
             "reordering": profile.reordering,
-            "preview": profile.preview,
             "pen_up_command": profile.pen_up_command,
             "pen_down_command": profile.pen_down_command,
         }
@@ -843,8 +868,6 @@ class AppWindow:
         self.speed_pendown_var.set(profile.speed_pendown)
         self.accel_var.set(profile.accel)
         self.reordering_var.set(self._reordering_label(profile.reordering))
-        self.auto_rotate_var.set(profile.auto_rotate)
-        self.preview_var.set(profile.preview)
 
     def on_load_svg(self) -> None:
         dialog_kwargs = {
@@ -1015,17 +1038,33 @@ class AppWindow:
     def on_status(self) -> None:
         self._update_from_result(self.driver.status())
 
+    def _go_to_my_home_and_reset(self) -> DriverCommandResult:
+        result = self.driver.go_to_my_home()
+        if result.ok:
+            self._jog_accu_x = 0.0
+            self._jog_accu_y = 0.0
+            self._jog_ref_valid = True
+        return result
+
+    def _physical_home_and_invalidate(self) -> DriverCommandResult:
+        result = self.driver.home()
+        if result.ok:
+            self._jog_ref_valid = False
+        return result
+
     def on_home(self) -> None:
-        self._run_manual_action_async("Home", self.driver.home)
+        self._run_manual_action_async("My home", self._go_to_my_home_and_reset)
 
     def on_jog_home(self) -> None:
-        self._run_manual_action_async("Home", self.driver.go_to_my_home)
+        self._run_manual_action_async("Home", self._go_to_my_home_and_reset)
 
     def on_machine_physical_home(self) -> None:
-        self._run_manual_action_async("Physical Home", self.driver.home)
+        self._run_manual_action_async(
+            "Physical Home", self._physical_home_and_invalidate
+        )
 
     def on_machine_my_home(self) -> None:
-        self._run_manual_action_async("My home", self.driver.go_to_my_home)
+        self._run_manual_action_async("My home", self._go_to_my_home_and_reset)
 
     def on_center(self) -> None:
         self._run_manual_action_async("Center", self.driver.center_for_test)
@@ -1130,10 +1169,89 @@ class AppWindow:
         self.on_jog_bottom()
 
     def _jog(self, x_mm: float, y_mm: float, action: str) -> None:
-        self._run_manual_action_async(
-            action,
-            lambda: self.driver.jog_for_test(x_mm, y_mm),
+        def _tracked() -> DriverCommandResult:
+            result = self.driver.jog_for_test(x_mm, y_mm)
+            if result.ok and self._jog_ref_valid:
+                self._jog_accu_x += x_mm
+                self._jog_accu_y += y_mm
+            return result
+
+        self._run_manual_action_async(action, _tracked)
+
+    def _jog_visual_position(self) -> tuple[float, float] | None:
+        """Current pen position in visual table coords (mm from top-left)."""
+        if not self._jog_ref_valid:
+            return None
+        machine = get_machine_model(self.driver.machine_settings.machine_model)
+        orientation = self.driver.machine_settings.table_orientation.strip().lower()
+        table_w = machine.height_mm if orientation == "portrait" else machine.width_mm
+        table_h = machine.width_mm if orientation == "portrait" else machine.height_mm
+        x_axis, y_axis = display_axis_vectors(machine, orientation)
+        visual_right = self._jog_accu_x * x_axis[0] + self._jog_accu_y * y_axis[0]
+        visual_down = self._jog_accu_x * x_axis[1] + self._jog_accu_y * y_axis[1]
+        ms = self.driver.machine_settings
+        corner = ms.my_home_corner.strip().lower()
+        home_x = (
+            ms.drawing_margin_left_mm
+            if "left" in corner
+            else table_w - ms.drawing_margin_right_mm
         )
+        home_y = (
+            ms.drawing_margin_top_mm
+            if "top" in corner
+            else table_h - ms.drawing_margin_bottom_mm
+        )
+        return home_x + visual_right, home_y + visual_down
+
+    def _update_jog_position_display(self) -> None:
+        pos = self._jog_visual_position()
+        if pos is None:
+            self.jog_position_var.set("—  go to My home to set reference")
+            return
+        x_vis, y_vis = pos
+        self.jog_position_var.set(
+            f"X from left: {x_vis:.0f} mm  ·  Y from top: {y_vis:.0f} mm"
+        )
+
+    def on_jog_set_margin(self, side: str) -> None:
+        pos = self._jog_visual_position()
+        if pos is None:
+            self._set_status_message("No reference: go to My home first")
+            self._set_status_style(ok=False)
+            return
+        x_vis, y_vis = pos
+        machine = get_machine_model(self.driver.machine_settings.machine_model)
+        orientation = self.driver.machine_settings.table_orientation.strip().lower()
+        table_w = machine.height_mm if orientation == "portrait" else machine.width_mm
+        table_h = machine.width_mm if orientation == "portrait" else machine.height_mm
+        margin_values = {
+            "top": round(y_vis),
+            "bottom": round(table_h - y_vis),
+            "left": round(x_vis),
+            "right": round(table_w - x_vis),
+        }
+        margin = max(0, margin_values[side])
+        self.driver.update_machine_settings(**{f"drawing_margin_{side}_mm": margin})
+        self._persist_machine_settings()
+        self._sync_machine_controls()
+        self._set_status_message(f"OK: {side.title()} margin \u2192 {margin} mm")
+        self._set_status_style(ok=True)
+        self._append_trace_log(f"{side.title()} margin \u2192 {margin} mm (from jog)")
+
+    def on_keyboard_jog(self, direction: str) -> None:
+        if self._is_manual_action_running or self._is_loading_svg:
+            return
+        if self.tabs is None or self.tabs.get() != "Jog":
+            return
+        focused = self.root.focus_get()
+        if focused is not None and focused.winfo_class() == "Entry":
+            return
+        {
+            "left": self.on_jog_left,
+            "right": self.on_jog_right,
+            "up": self.on_jog_top,
+            "down": self.on_jog_bottom,
+        }[direction]()
 
     def _run_manual_action_async(
         self,
@@ -1254,12 +1372,6 @@ class AppWindow:
 
     def on_reordering_change(self, value: str) -> None:
         self._apply_plot_profile(reordering=self._reordering_value(value))
-
-    def on_options_change(self) -> None:
-        self._apply_plot_profile(
-            auto_rotate=bool(self.auto_rotate_var.get()),
-            preview=bool(self.preview_var.get()),
-        )
 
     def show(self) -> None:
         self.root.mainloop()

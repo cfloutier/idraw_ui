@@ -37,15 +37,23 @@ def _mirror_digest(digest: Any, *, mirror_x: bool, mirror_y: bool) -> None:
                         vertex[1] = digest.height - vertex[1]
 
 
-def _apply_logical_home_to_digest(session: Any, home_corner: str) -> None:
+def _apply_logical_home_to_digest(
+    session: Any, home_corner: str, *, orientation: str = "portrait"
+) -> None:
     digest = session.digest
+    is_landscape = orientation.strip().lower() == "landscape"
     if digest.metadata.get(_CONTENT_ORIENTATION_METADATA_KEY) != (
         _UPRIGHT_CONTENT_VERSION
     ):
-        _mirror_digest(digest, mirror_x=True, mirror_y=True)
+        # portrait digest arrives 180° rotated; landscape arrives already upright
+        if not is_landscape:
+            _mirror_digest(digest, mirror_x=True, mirror_y=True)
         digest.metadata[_CONTENT_ORIENTATION_METADATA_KEY] = _UPRIGHT_CONTENT_VERSION
 
     target_mirror_x, target_mirror_y = logical_home_mirror_axes(home_corner)
+    # landscape axes are 90° rotated: swap and invert mirror formula
+    if is_landscape:
+        target_mirror_x, target_mirror_y = target_mirror_y, not target_mirror_x
 
     digest.metadata[_LOGICAL_HOME_METADATA_KEY] = home_corner
     start_x = digest.width if target_mirror_x else 0.0
@@ -85,6 +93,7 @@ def _default_session_factory() -> Any:
             _apply_logical_home_to_digest(
                 self,
                 self._idraw_ui_logical_home_corner,
+                orientation=self._idraw_ui_table_orientation,
             )
             return True
 
@@ -354,7 +363,11 @@ class Idraw2InternalRuntime:
             options.speed_pendown = self.plot_profile.speed_pendown
             options.speed_penup = self.plot_profile.speed_penup
         options.accel = self.plot_profile.accel
-        options.auto_rotate = self.plot_profile.auto_rotate
+        # landscape: vendor auto_rotate conflicts with our correction; portrait: needed
+        is_landscape_mode = (
+            self.machine_settings.table_orientation.strip().lower() == "landscape"
+        )
+        options.auto_rotate = not is_landscape_mode
         options.reordering = self.plot_profile.reordering
         options.report_time = False
         options.model = get_machine_model(
@@ -362,6 +375,9 @@ class Idraw2InternalRuntime:
         ).runtime_model
         session._idraw_ui_logical_home_corner = (
             self.machine_settings.my_home_corner.strip().lower()
+        )
+        session._idraw_ui_table_orientation = (
+            self.machine_settings.table_orientation.strip().lower()
         )
 
         if resume_type is not None:

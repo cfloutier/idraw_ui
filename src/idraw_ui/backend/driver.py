@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -201,17 +203,51 @@ class Driver:
 
     def home(self) -> DriverCommandResult:
         return self._run_bridge_action_with_auto_disconnect(
-            self.bridge.home,
+            self._home_with_pen_up,
             working_state=PlotState.HOMING,
             success_message="Homing completed",
             failure_prefix="Homing failed",
         )
 
+    def _home_with_pen_up(self) -> str:
+        self.bridge.raise_pen()
+        time.sleep(0.3)  # let servo physically move before homing starts
+        return self.bridge.home()
+
+    def _move_and_wait(self, x_mm: float, y_mm: float) -> str:
+        """Move then sleep for expected travel time so callers see a settled machine."""
+        result = self.bridge.move_relative(
+            x_mm=x_mm,
+            y_mm=y_mm,
+            feed_mm_min=self.plot_profile.speed_penup,
+        )
+        distance_mm = math.hypot(x_mm, y_mm)
+        speed_mm_s = max(1.0, self.plot_profile.speed_penup / 60.0)
+        time.sleep(distance_mm / speed_mm_s + 0.4)
+        return result
+
     def go_to_my_home(self) -> DriverCommandResult:
         def do_go_to_my_home() -> str:
-            self.bridge.home()
             target_corner = self.machine_settings.my_home_corner.strip().lower()
             machine = get_machine_model(self.machine_settings.machine_model)
+            orientation = self.machine_settings.table_orientation.strip().lower()
+            display_width_mm = (
+                machine.height_mm if orientation == "portrait" else machine.width_mm
+            )
+            display_height_mm = (
+                machine.width_mm if orientation == "portrait" else machine.height_mm
+            )
+            if (
+                self.machine_settings.drawing_margin_left_mm
+                + self.machine_settings.drawing_margin_right_mm
+                >= display_width_mm
+                or self.machine_settings.drawing_margin_top_mm
+                + self.machine_settings.drawing_margin_bottom_mm
+                >= display_height_mm
+            ):
+                raise ValueError("Drawing margins leave no usable machine area")
+
+            self._home_with_pen_up()
             if target_corner not in {
                 "top-left",
                 "top-right",
@@ -222,19 +258,17 @@ class Driver:
 
             x_mm, y_mm = move_delta_to_corner(
                 machine,
-                self.machine_settings.table_orientation,
+                orientation,
                 target_corner,
-                padding_mm=max(0.0, float(self.machine_settings.my_home_padding_mm)),
+                margin_top_mm=self.machine_settings.drawing_margin_top_mm,
+                margin_bottom_mm=self.machine_settings.drawing_margin_bottom_mm,
+                margin_left_mm=self.machine_settings.drawing_margin_left_mm,
+                margin_right_mm=self.machine_settings.drawing_margin_right_mm,
             )
             if abs(x_mm) < 1e-6 and abs(y_mm) < 1e-6:
                 return "already at my home"
 
-            self.bridge.raise_pen()
-            return self.bridge.move_relative(
-                x_mm=x_mm,
-                y_mm=y_mm,
-                feed_mm_min=self.plot_profile.speed_penup,
-            )
+            return self._move_and_wait(x_mm, y_mm)
 
         return self._run_bridge_action_with_auto_disconnect(
             do_go_to_my_home,
@@ -245,18 +279,13 @@ class Driver:
 
     def center_for_test(self) -> DriverCommandResult:
         def do_center() -> str:
-            self.bridge.home()
-            self.bridge.raise_pen()
+            self._home_with_pen_up()
             machine = get_machine_model(self.machine_settings.machine_model)
             x_mm, y_mm = move_delta_to_center(
                 machine,
                 self.machine_settings.table_orientation,
             )
-            return self.bridge.move_relative(
-                x_mm=x_mm,
-                y_mm=y_mm,
-                feed_mm_min=self.plot_profile.speed_penup,
-            )
+            return self._move_and_wait(x_mm, y_mm)
 
         return self._run_bridge_action_with_auto_disconnect(
             do_center,

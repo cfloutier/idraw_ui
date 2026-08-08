@@ -41,11 +41,21 @@ class PagePlacement:
     def fits_table(self) -> bool:
         return self.left >= 0 and self.top >= 0
 
-    def fits_within(self, table_width: float, table_height: float) -> bool:
+    def fits_within(
+        self,
+        table_width: float,
+        table_height: float,
+        *,
+        margin_top: float = 0.0,
+        margin_bottom: float = 0.0,
+        margin_left: float = 0.0,
+        margin_right: float = 0.0,
+    ) -> bool:
         return (
-            self.fits_table
-            and self.right <= table_width
-            and self.bottom <= table_height
+            self.left >= margin_left
+            and self.top >= margin_top
+            and self.right <= table_width - margin_right
+            and self.bottom <= table_height - margin_bottom
         )
 
 
@@ -56,20 +66,26 @@ def calculate_page_placement(
     page_width: float,
     page_height: float,
     home_corner: str,
-    padding: float,
+    margin_top: float,
+    margin_bottom: float,
+    margin_left: float,
+    margin_right: float,
 ) -> PagePlacement:
-    padding = max(0.0, padding)
+    margin_top = max(0.0, margin_top)
+    margin_bottom = max(0.0, margin_bottom)
+    margin_left = max(0.0, margin_left)
+    margin_right = max(0.0, margin_right)
     if "left" in home_corner:
-        left = padding
+        left = margin_left
     elif "right" in home_corner:
-        left = table_width - padding - page_width
+        left = table_width - margin_right - page_width
     else:
         raise ValueError(f"Invalid home corner: {home_corner}")
 
     if "top" in home_corner:
-        top = padding
+        top = margin_top
     elif "bottom" in home_corner:
-        top = table_height - padding - page_height
+        top = table_height - margin_bottom - page_height
     else:
         raise ValueError(f"Invalid home corner: {home_corner}")
 
@@ -156,7 +172,10 @@ class SvgPagePreview:
         self._table_width = 1.0
         self._table_height = 1.0
         self._home_corner = "top-left"
-        self._padding = 0.0
+        self._margin_top = 0.0
+        self._margin_bottom = 0.0
+        self._margin_left = 0.0
+        self._margin_right = 0.0
         self._on_fit_changed = on_fit_changed
         self._last_fit_state: bool | None = None
 
@@ -191,12 +210,18 @@ class SvgPagePreview:
         width_mm: float,
         height_mm: float,
         home_corner: str,
-        padding_mm: float,
+        margin_top_mm: float,
+        margin_bottom_mm: float,
+        margin_left_mm: float,
+        margin_right_mm: float,
     ) -> None:
         self._table_width = max(1.0, float(width_mm))
         self._table_height = max(1.0, float(height_mm))
         self._home_corner = home_corner
-        self._padding = max(0.0, float(padding_mm))
+        self._margin_top = max(0.0, float(margin_top_mm))
+        self._margin_bottom = max(0.0, float(margin_bottom_mm))
+        self._margin_left = max(0.0, float(margin_left_mm))
+        self._margin_right = max(0.0, float(margin_right_mm))
         self._redraw()
         self._notify_fit_changed()
 
@@ -210,9 +235,19 @@ class SvgPagePreview:
             page_width=page.width,
             page_height=page.height,
             home_corner=self._home_corner,
-            padding=self._padding,
+            margin_top=self._margin_top,
+            margin_bottom=self._margin_bottom,
+            margin_left=self._margin_left,
+            margin_right=self._margin_right,
         )
-        return placement.fits_within(self._table_width, self._table_height)
+        return placement.fits_within(
+            self._table_width,
+            self._table_height,
+            margin_top=self._margin_top,
+            margin_bottom=self._margin_bottom,
+            margin_left=self._margin_left,
+            margin_right=self._margin_right,
+        )
 
     def _notify_fit_changed(self) -> None:
         fit_state = self.page_fits_table()
@@ -287,6 +322,21 @@ class SvgPagePreview:
             width=2,
         )
 
+        safe_left = table_left + (self._margin_left * scale)
+        safe_top = table_top + (self._margin_top * scale)
+        safe_right = table_right - (self._margin_right * scale)
+        safe_bottom = table_bottom - (self._margin_bottom * scale)
+        safe_area_valid = safe_left < safe_right and safe_top < safe_bottom
+        canvas.create_rectangle(
+            safe_left,
+            safe_top,
+            safe_right,
+            safe_bottom,
+            outline="#3A7BD5" if safe_area_valid else "#B42318",
+            width=2,
+            dash=(5, 3),
+        )
+
         placement_page_width = page.width
         placement_page_height = page.height
         physical_size_known = page.label == "mm"
@@ -302,7 +352,10 @@ class SvgPagePreview:
             page_width=placement_page_width,
             page_height=placement_page_height,
             home_corner=self._home_corner,
-            padding=self._padding,
+            margin_top=self._margin_top,
+            margin_bottom=self._margin_bottom,
+            margin_left=self._margin_left,
+            margin_right=self._margin_right,
         )
         left = table_left + (placement.left * scale)
         top = table_top + (placement.top * scale)
@@ -311,6 +364,10 @@ class SvgPagePreview:
         page_fits = placement.fits_within(
             self._table_width,
             self._table_height,
+            margin_top=self._margin_top,
+            margin_bottom=self._margin_bottom,
+            margin_left=self._margin_left,
+            margin_right=self._margin_right,
         )
 
         canvas.create_rectangle(
@@ -358,12 +415,12 @@ class SvgPagePreview:
             f"{_format_size_value(page.height)} {page.label}"
         )
         home_points = {
-            "top-left": (table_left, table_top, "nw"),
-            "top-right": (table_right, table_top, "ne"),
-            "bottom-left": (table_left, table_bottom, "sw"),
-            "bottom-right": (table_right, table_bottom, "se"),
+            "top-left": (safe_left, safe_top),
+            "top-right": (safe_right, safe_top),
+            "bottom-left": (safe_left, safe_bottom),
+            "bottom-right": (safe_right, safe_bottom),
         }
-        home_x, home_y, _home_anchor = home_points[self._home_corner]
+        home_x, home_y = home_points[self._home_corner]
         canvas.create_oval(
             home_x - 7,
             home_y - 7,
