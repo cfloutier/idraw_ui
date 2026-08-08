@@ -83,7 +83,7 @@ class MachineTab:
 
         ctk.CTkLabel(
             frame,
-            text="My home",
+            text="Home",
             font=ctk.CTkFont(size=13, weight="bold"),
         ).grid(row=6, column=0, sticky="w", padx=8, pady=(3, 2))
 
@@ -154,7 +154,7 @@ class MachineTab:
 
         self.window.machine_my_home_button = ctk.CTkButton(
             home_actions,
-            text="My home",
+            text="Home",
             command=self.window.on_machine_my_home,
             height=40,
         )
@@ -252,7 +252,7 @@ class MachineTab:
 
         dialog = ctk.CTkToplevel(self.window.root)
         self._home_dialog = dialog
-        dialog.title("Choose My home")
+        dialog.title("Choose Home corner")
         dialog.transient(self.window.root)
         dialog.grab_set()
         dialog.resizable(False, False)
@@ -616,7 +616,7 @@ class MachineTab:
                 canvas.create_text(
                     my_home_label_x,
                     my_home_label_y,
-                    text="My home",
+                    text="Home",
                     anchor=my_home_anchor,
                     fill="#3A7BD5",
                     font=("Segoe UI", 9, "bold"),

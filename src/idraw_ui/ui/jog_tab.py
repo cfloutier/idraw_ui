@@ -95,7 +95,7 @@ class JogTab:
 
         ctk.CTkLabel(
             left,
-            text="Go to My home · jog to a boundary · click to record",
+            text="Go to Home · jog to a boundary · click to record",
             font=ctk.CTkFont(size=11),
             text_color=("#5E5E5E", "#A9A9A9"),
             wraplength=220,

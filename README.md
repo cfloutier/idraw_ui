@@ -1,70 +1,263 @@
 # idraw_ui
 
-Prototype UI and application layer for the new iDraw-based workflow.
+Desktop application for controlling iDraw plotters — load an SVG, configure
+the pen and speed, choose a drawing zone, and plot.
 
-This repository is intentionally started as a clean slate, with a clear separation between:
+---
 
-- UI layer
-- application/backend layer
-- vendor bridge to the iDraw runtime bundle
+## Requirements
 
-## Architecture goal
+- **Tested on Windows 10/11** (64-bit). The application has not been tested on
+  Linux or macOS but uses only cross-platform libraries and should work without
+  changes on those platforms.
+- **Python 3.10 or later**
+  → Download from <https://www.python.org/downloads/> and make sure to tick
+  **"Add Python to PATH"** during installation.
 
-- The UI should talk to a stable application API, not directly to the vendor internals.
-- Profiles and machine settings are owned by the application layer.
-- Vendor-specific implementation details stay behind the bridge.
+---
 
-## Environment setup (conventional)
+## Installation
 
-This project uses a local virtualenv (`.venv`) and standard pip dependencies.
-The single dependency entrypoint is `requirements.txt`.
-`pyproject.toml` does not duplicate runtime dependencies to avoid drift.
+Open a PowerShell window in the project folder and run these three commands in
+order.
 
-1. Create and activate local env:
+**1 — Create a virtual environment**
 
 ```powershell
 python -m venv .venv
+```
+
+**2 — Activate it**
+
+```powershell
 .\.venv\Scripts\Activate.ps1
 ```
 
-1. Install local Python deps:
+> If PowerShell refuses with an execution-policy error, run this once first:
+> ```powershell
+> Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
+> ```
+
+**3 — Install dependencies**
 
 ```powershell
 python -m pip install -r requirements.txt
 ```
 
-1. Run first hardware test:
+---
+
+## Launching the application
+
+**Windows**
 
 ```powershell
-python scripts\test_tracer_connection.py
+.\run.bat
 ```
 
-The test script now talks to DrawCore directly through `pyserial` and does not use
-any import or path from the Inkscape extension folder.
+**Linux / macOS** (make the script executable once: `chmod +x run.sh`)
 
-## Run the MVP UI
-
-Launch the current MVP UI from the project root:
-
-```powershell
-$env:PYTHONPATH="src"
-python -m idraw_ui.app
+```bash
+./run.sh
 ```
 
-The UI is now built with `customtkinter` for a cleaner visual style and exposes
-the current operational workflow through six tabs:
+---
 
-- `Trace`: load or reload an SVG, start/pause/stop a plot, and access quick
-	`My home`, `Center`, `Pen Up`, and `Pen Down` actions. Its table preview shows
-	the loaded SVG placement, selected home, orientation, dimensions, and bounds.
-- `Jog`: manual homing, centering, and XY jogging.
-- `Pen`: pen height tuning and live pen tests.
-- `Draw Options`: speed, acceleration, ordering, and preview defaults.
-- `Machine`: machine model selection.
-- `Log`: diagnostic output intended for development and troubleshooting.
+## Interface overview
 
-The loaded SVG name is shown in the top bar. Operational state, timing, and
-distance metrics are consolidated in the colored footer status area.
+The window has five tabs across the top. The active SVG file and the current
+draw profile are shown in the header bar at all times.
+
+---
+
+### Trace
+
+![Trace tab](docs/Trace_tab.png)
+
+The main operating page.
+
+| Control | Description |
+| --- | --- |
+| **Load SVG** | Open an SVG file to plot. |
+| **Reload** | Reload the last opened file (useful after editing it externally). |
+| **Reordering** | Path optimisation level before plotting (Least / Basic / Full / None). |
+| **Play** | Start plotting. Triggers a fast estimate first; the progress bar shows expected duration. |
+| **Pause / Stop** | Interrupt the current plot. |
+| **Home** | Raise the pen, home the machine to the physical limit switches, then move to the configured logical home corner. |
+| **Center** | Move the carriage to the centre of the table. |
+| **Pen Up / Pen Down** | Manually raise or lower the pen. |
+
+The preview on the right shows where the SVG will be placed on the table, based
+on the current machine, orientation, home corner, and drawing margins. If the
+SVG does not fit inside the configured drawing area, **OUT OF BOUNDS** appears
+beside the Play button and the preview outline turns red.
+
+---
+
+### Jog
+
+![Jog tab](docs/Jog.png)
+
+Manual carriage control.
+
+- **Home / Center** — same as the Trace shortcuts.
+- **Jog mode** — switch between *physical* axes (+X/+Y) and *table-relative*
+  directions (right/left/forward/backward). Use table mode if you are not sure
+  which way the machine's axes point.
+- **Arrow buttons / keyboard arrows** — move the carriage by the selected
+  distance. Arrow keys on the keyboard work when this tab is active.
+- **Jog distance slider** — step size per button press.
+
+**Setting drawing margins from hardware**
+
+This is the recommended way to define your drawing area:
+
+1. Click **Home** — the position display resets to `0`.
+2. Jog the carriage to the boundary you want to set (e.g. the top edge of your
+   paper surface).
+3. Click the matching **Set Top / Set Bottom / Set Left / Set Right** button.
+   The margin is saved immediately and the preview updates.
+
+---
+
+### Draw Profile
+
+![Draw Profile tab](docs/draw_profile_tab.png)
+
+Speed and pen height settings, saved in the active profile.
+
+**Speed** (left column)
+
+| Slider | Description |
+| --- | --- |
+| Travel speed (pen up) | How fast the carriage moves between strokes. |
+| Drawing speed (pen down) | How fast the pen moves while drawing. |
+| Acceleration | Motor ramp-up rate. |
+
+**Pen Height** (right column)
+
+| Control | Description |
+| --- | --- |
+| Pen up height | Z position when the pen is lifted (0 = fully down, 10 = fully up). |
+| Pen down height | Z position when the pen is drawing. |
+| Apply live | Apply slider changes immediately to the physical pen without re-plotting. |
+| Pen Up / Pen Down | Test the current heights on the machine. |
+
+Profiles are selected and created in the header bar. Each profile stores all
+speed and pen values independently.
+
+---
+
+### Marks
+
+![Marks tab](docs/marks_tab.png)
+
+Generate and plot registration marks so you can position your paper precisely on the table.
+
+| Control | Description |
+| --- | --- |
+| **Page format** | Paper size to mark: A0–A6 or Raisin variants (Grand Raisin, Raisin, Demi-Raisin). |
+| **Orientation** | Portrait or landscape for the selected format. |
+| **Mark arm** | Length of each arm of the L-shaped corner mark (same in X and Y). |
+| **Plot marks** | Generate the SVG, load it in the Trace tab, and estimate — click Play to plot. |
+
+The preview shows the table, the drawing margin zone (dotted), and the page
+positioned at the configured home corner. The four L-shaped marks are drawn to
+scale in the preview. If the selected format does not fit inside the drawing area
+the page outline turns red.
+
+---
+
+### Machine
+
+![Machine tab](docs/machine_tab.png)
+
+One-time configuration that matches the application to your physical plotter.
+
+| Setting | Description |
+| --- | --- |
+| **iDraw model** | Select the exact model — this defines the work area dimensions and axis directions. |
+| **Table orientation** | How the plotter is physically placed on the table (landscape or portrait). This affects jog directions. |
+| **Home** | Which corner of the table you want to use as the drawing anchor. |
+| **Drawing margins** | Inset from each edge in mm — defines the usable drawing area inside the full work area. |
+| **Physical Home** | Send the machine to its firmware limit-switch home. |
+| **Home** | Move to the logical home corner (with margins applied). |
+
+The table preview on the right shows the machine footprint, the drawing margin
+boundary (dotted line), the physical home marker (orange), and the logical home
+marker (blue). It updates live as you change any setting.
+
+---
+
+## Before first use — mandatory safety test
+
+Run this procedure before plotting on any machine that has not been validated,
+and again after changing the model, orientation, or axis configuration.
+
+> Every **Home** and **Center** action raises the pen before moving. If the
+> pen raise fails, the movement is aborted. Raise the pen manually and diagnose
+> the pen command before retrying.
+
+### Prepare
+
+1. Clear the plotter area and keep access to the emergency stop or power switch.
+2. Remove the pen (or make certain it stays raised) for the first dry run.
+3. In **Machine**, select the exact model, orientation, and home corner.
+4. Move the carriage by hand to the centre of the work area (motors off or
+   machine powered down). Do not force a powered motor.
+5. Power the machine back on.
+6. In **Trace**, load `test_svg_files/_test_a6.svg`.
+7. Check the preview: the home marker must match the chosen corner; the A6
+   page must appear in the expected area; **OUT OF BOUNDS** must not be shown.
+
+### Validate the home corner
+
+Be ready to press **Stop** or cut power if the carriage heads the wrong way.
+
+| Selected Home | Expected drawing direction from the centre |
+| --- | --- |
+| `top-left` | right and down |
+| `top-right` | left and down |
+| `bottom-left` | right and up |
+| `bottom-right` | left and up |
+
+1. Press **Play** and verify the first moves against this table.
+2. Stop immediately if the direction is wrong or the carriage approaches a limit.
+3. If the dry run is correct, install the pen and repeat on paper.
+4. Confirm the page is in the expected zone, the `Up` arrow points toward the
+   visual top of the table, and `A6 Test` is upright and not mirrored.
+5. Repeat for every home corner you plan to use.
+
+Do not plot for production if this test fails. A wrong direction means the
+selected model does not match the physical machine.
+
+---
+
+## Advanced settings
+
+A few low-level settings are not exposed in the UI and must be edited directly
+in `settings/machine.yaml`.
+
+```yaml
+baudrate: 115200
+digest: 1
+port: null
+serial_timeout: 1.0
+```
+
+| Key | Description |
+| --- | --- |
+| `port` | Serial port to use (`null` = auto-detect the first available iDraw device). |
+| `baudrate` | Serial baud rate — leave at default unless debugging a hardware issue. |
+| `serial_timeout` | Read timeout in seconds. |
+| `digest` | `0` = disabled, `1` = normal (recommended), `2` = digest-only (no plotting). |
+
+---
+
+## Documentation
+
+- Hardware observations and validated axis mapping: `docs/hardware_notes.md`
+- Architecture, pipeline details, developer notes: `docs/developer_notes.md`
+
 
 ## Mandatory safety test before first use
 

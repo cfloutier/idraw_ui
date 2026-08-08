@@ -21,11 +21,11 @@ from idraw_ui.backend.machine_models import (
 )
 from idraw_ui.backend.models import PlotProfile, PlotState
 from idraw_ui.backend.settings_service import SettingsService
-from idraw_ui.ui.draw_options_tab import DrawOptionsTab
+from idraw_ui.ui.draw_profile_tab import DrawProfileTab
 from idraw_ui.ui.jog_tab import JogTab
 from idraw_ui.ui.log_tab import LogTab
 from idraw_ui.ui.machine_tab import MachineTab
-from idraw_ui.ui.pen_tab import PenTab
+from idraw_ui.ui.marks_tab import MarksTab
 from idraw_ui.ui.progress_bar import ProgressBar
 from idraw_ui.ui.svg_page_preview import SvgPagePreview
 from idraw_ui.ui.tools import (
@@ -194,15 +194,15 @@ class AppWindow:
         self.tabs.grid(row=1, column=0, sticky="nsew", padx=4, pady=(0, 4))
         self.tabs.add("Trace")
         self.tabs.add("Jog")
-        self.tabs.add("Pen")
-        self.tabs.add("Draw Options")
+        self.tabs.add("Draw Profile")
+        self.tabs.add("Marks")
         self.tabs.add("Machine")
         self.tabs.add("Log")
 
         self._build_trace_tab(self.tabs.tab("Trace"))
         self._build_jog_tab(self.tabs.tab("Jog"))
-        self._build_pen_tab(self.tabs.tab("Pen"))
-        self._build_draw_options_tab(self.tabs.tab("Draw Options"))
+        self._build_draw_profile_tab(self.tabs.tab("Draw Profile"))
+        self._build_marks_tab(self.tabs.tab("Marks"))
         self._build_machine_tab(self.tabs.tab("Machine"))
         self._build_log_tab(self.tabs.tab("Log"))
         self._build_footer_status(root_frame)
@@ -291,11 +291,11 @@ class AppWindow:
     def _build_log_tab(self, tab: ctk.CTkFrame) -> None:
         LogTab(self, tab)
 
-    def _build_pen_tab(self, tab: ctk.CTkFrame) -> None:
-        PenTab(self, tab)
+    def _build_draw_profile_tab(self, tab: ctk.CTkFrame) -> None:
+        DrawProfileTab(self, tab)
 
-    def _build_draw_options_tab(self, tab: ctk.CTkFrame) -> None:
-        DrawOptionsTab(self, tab)
+    def _build_marks_tab(self, tab: ctk.CTkFrame) -> None:
+        MarksTab(self, tab)
 
     def _build_slider_block(
         self,
@@ -673,10 +673,10 @@ class AppWindow:
         if self.tabs is None:
             return
 
-        allowed_tabs = {"Trace", "Jog", "Machine", "Pen", "Draw Options", "Log"}
+        allowed_tabs = {"Trace", "Jog", "Machine", "Draw Profile", "Marks", "Log"}
         active_tab = self.settings_service.app_state.active_tab
-        if active_tab in {"Speed", "Options"}:
-            active_tab = "Draw Options"
+        if active_tab in {"Speed", "Options", "Draw Options", "Pen"}:
+            active_tab = "Draw Profile"
         if active_tab not in allowed_tabs:
             active_tab = "Jog"
         self.tabs.set(active_tab)
@@ -755,9 +755,9 @@ class AppWindow:
         self.driver.update_machine_settings(my_home_corner=corner)
         self._persist_machine_settings()
         self._sync_machine_controls()
-        self._set_status_message(f"OK: My home set to {corner}")
+        self._set_status_message(f"OK: Home set to {corner}")
         self._set_status_style(ok=True)
-        self._append_trace_log(f"My home set to {corner}")
+        self._append_trace_log(f"Home set to {corner}")
 
     def on_machine_margin_change(self, side: str, value: str) -> None:
         if side not in self.machine_margin_vars or not value.isdecimal():
@@ -1053,7 +1053,7 @@ class AppWindow:
         return result
 
     def on_home(self) -> None:
-        self._run_manual_action_async("My home", self._go_to_my_home_and_reset)
+        self._run_manual_action_async("Home", self._go_to_my_home_and_reset)
 
     def on_jog_home(self) -> None:
         self._run_manual_action_async("Home", self._go_to_my_home_and_reset)
@@ -1064,7 +1064,7 @@ class AppWindow:
         )
 
     def on_machine_my_home(self) -> None:
-        self._run_manual_action_async("My home", self._go_to_my_home_and_reset)
+        self._run_manual_action_async("Home", self._go_to_my_home_and_reset)
 
     def on_center(self) -> None:
         self._run_manual_action_async("Center", self.driver.center_for_test)
@@ -1206,7 +1206,7 @@ class AppWindow:
     def _update_jog_position_display(self) -> None:
         pos = self._jog_visual_position()
         if pos is None:
-            self.jog_position_var.set("—  go to My home to set reference")
+            self.jog_position_var.set("—  go to Home to set reference")
             return
         x_vis, y_vis = pos
         self.jog_position_var.set(
@@ -1216,7 +1216,7 @@ class AppWindow:
     def on_jog_set_margin(self, side: str) -> None:
         pos = self._jog_visual_position()
         if pos is None:
-            self._set_status_message("No reference: go to My home first")
+            self._set_status_message("No reference: go to Home first")
             self._set_status_style(ok=False)
             return
         x_vis, y_vis = pos

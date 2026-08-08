@@ -121,7 +121,7 @@ class TraceTab:
 
         self.window.trace_home_button = ctk.CTkButton(
             quick_controls,
-            text="My home",
+            text="Home",
             command=self.window.on_home,
             height=40,
         )
