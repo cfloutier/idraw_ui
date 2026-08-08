@@ -85,18 +85,18 @@ _MODEL_DEFINITIONS = (
         x_axis_toward_home=False,
         y_axis_toward_home=True,
     ),
-    MachineModelDefinition(
-        key="idraw-lab-reverse",
-        label="iDraw Lab Reverse",
-        runtime_model=6,
-        width_mm=500,
-        height_mm=350,
-        physical_home="bottom-left",
-        my_home_corner="top-right",
-        long_axis_is_y=False,
-        x_axis_toward_home=True,
-        y_axis_toward_home=False,
-    ),
+    # MachineModelDefinition(
+    #     key="idraw-lab-reverse",
+    #     label="iDraw Lab Reverse",
+    #     runtime_model=6,
+    #     width_mm=500,
+    #     height_mm=350,
+    #     physical_home="bottom-left",
+    #     my_home_corner="top-right",
+    #     long_axis_is_y=False,
+    #     x_axis_toward_home=True,
+    #     y_axis_toward_home=False,
+    # ),
 )
 
 MACHINE_MODELS = {model.key: model for model in _MODEL_DEFINITIONS}
