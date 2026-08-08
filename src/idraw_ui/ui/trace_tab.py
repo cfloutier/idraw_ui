@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-
 import customtkinter as ctk
+
+from idraw_ui.ui.svg_page_preview import SvgPagePreview
 
 
 class TraceTab:
-    """Trace tab UI for loading SVGs, running plots, and monitoring state."""
+    """Trace tab UI for loading SVGs and running plots."""
 
     def __init__(self, window, tab: ctk.CTkFrame) -> None:
         self.window = window
@@ -58,6 +59,7 @@ class TraceTab:
         run_bar.grid_columnconfigure(2, weight=1)
         run_bar.grid_columnconfigure(3, weight=0, minsize=8)
         run_bar.grid_columnconfigure(4, weight=1)
+        run_bar.grid_rowconfigure(1, minsize=24)
 
         self.window.play_button = ctk.CTkButton(
             run_bar, text="Play", command=self.window.on_play_pause_resume, height=52
@@ -78,6 +80,15 @@ class TraceTab:
             height=52,
         )
         self.window.stop_button.grid(row=0, column=4, sticky="ew")
+
+        ctk.CTkLabel(
+            run_bar,
+            textvariable=self.window.svg_bounds_warning_var,
+            text_color=("#B42318", "#FF6B6B"),
+            font=ctk.CTkFont(size=10, weight="bold"),
+            anchor="w",
+            height=24,
+        ).grid(row=1, column=0, columnspan=5, sticky="ew")
 
         separator = ctk.CTkFrame(controls, height=2, fg_color=("#C9D2DD", "#404550"))
         separator.grid(
@@ -124,12 +135,14 @@ class TraceTab:
             height=40,
         ).grid(row=1, column=1, sticky="ew", padx=(3, 0), pady=(3, 0))
 
-        monitor = ctk.CTkFrame(self.tab, corner_radius=12)
-        monitor.grid(row=0, column=1, sticky="nsew", padx=(0, 4), pady=4)
-        monitor.grid_rowconfigure(0, weight=1)
-        monitor.grid_columnconfigure(0, weight=1)
-
-        self.window.trace_log = ctk.CTkTextbox(monitor, wrap="word", height=300)
-        self.window.trace_log.grid(row=0, column=0, sticky="nsew", padx=8, pady=6)
-        self.window.trace_log.insert("1.0", self.window.trace_report_var.get())
-        self.window.trace_log.configure(state="disabled")
+        self.window.svg_page_preview = SvgPagePreview(
+            self.tab,
+            on_fit_changed=self.window.on_svg_page_fit_change,
+        )
+        self.window.svg_page_preview.grid(
+            row=0,
+            column=1,
+            sticky="nsew",
+            padx=(0, 4),
+            pady=4,
+        )

@@ -22,9 +22,11 @@ from idraw_ui.backend.models import PlotProfile, PlotState
 from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.ui.draw_options_tab import DrawOptionsTab
 from idraw_ui.ui.jog_tab import JogTab
+from idraw_ui.ui.log_tab import LogTab
 from idraw_ui.ui.machine_tab import MachineTab
 from idraw_ui.ui.pen_tab import PenTab
 from idraw_ui.ui.progress_bar import ProgressBar
+from idraw_ui.ui.svg_page_preview import SvgPagePreview
 from idraw_ui.ui.tools import (
     _mm_min_to_inch_s,
     format_distance_mm,
@@ -81,6 +83,7 @@ class AppWindow:
         )
         self.progress_var = tk.DoubleVar(value=0.0)
         self.trace_report_var = tk.StringVar(value="No SVG loaded.")
+        self.svg_bounds_warning_var = tk.StringVar(value="")
         self.pen_up_var = tk.DoubleVar(value=self.driver.plot_profile.pen_up_height)
         self.pen_down_var = tk.DoubleVar(value=self.driver.plot_profile.pen_down_height)
         self.pen_apply_live_var = tk.BooleanVar(value=False)
@@ -129,6 +132,7 @@ class AppWindow:
         self.connect_button: ctk.CTkButton | None = None
         self.disconnect_button: ctk.CTkButton | None = None
         self.trace_log: ctk.CTkTextbox | None = None
+        self.svg_page_preview: SvgPagePreview | None = None
         self.progress_bar: ProgressBar | None = None
         self.home_corner_options = list(MACHINE_HOME_CORNERS)
 
@@ -180,12 +184,14 @@ class AppWindow:
         self.tabs.add("Pen")
         self.tabs.add("Draw Options")
         self.tabs.add("Machine")
+        self.tabs.add("Log")
 
         self._build_trace_tab(self.tabs.tab("Trace"))
         self._build_jog_tab(self.tabs.tab("Jog"))
         self._build_pen_tab(self.tabs.tab("Pen"))
         self._build_draw_options_tab(self.tabs.tab("Draw Options"))
         self._build_machine_tab(self.tabs.tab("Machine"))
+        self._build_log_tab(self.tabs.tab("Log"))
         self._build_footer_status(root_frame)
         self._restore_active_tab()
 
@@ -254,12 +260,16 @@ class AppWindow:
 
     def _build_trace_tab(self, tab: ctk.CTkFrame) -> None:
         TraceTab(self, tab)
+        self._sync_svg_page_preview()
 
     def _build_jog_tab(self, tab: ctk.CTkFrame) -> None:
         JogTab(self, tab)
 
     def _build_machine_tab(self, tab: ctk.CTkFrame) -> None:
         MachineTab(self, tab)
+
+    def _build_log_tab(self, tab: ctk.CTkFrame) -> None:
+        LogTab(self, tab)
 
     def _build_pen_tab(self, tab: ctk.CTkFrame) -> None:
         PenTab(self, tab)
@@ -610,12 +620,34 @@ class AppWindow:
             self.driver.machine_settings.my_home_padding_mm
         )
         self.machine_size_var.set(f"{machine.width_mm} x {machine.height_mm} mm")
+        self._sync_svg_page_preview()
+
+    def _sync_svg_page_preview(self) -> None:
+        if self.svg_page_preview is None:
+            return
+        machine = get_machine_model(self.driver.machine_settings.machine_model)
+        orientation = self.driver.machine_settings.table_orientation
+        if orientation == "portrait":
+            width_mm = machine.height_mm
+            height_mm = machine.width_mm
+        else:
+            width_mm = machine.width_mm
+            height_mm = machine.height_mm
+        self.svg_page_preview.set_table(
+            width_mm=width_mm,
+            height_mm=height_mm,
+            home_corner=self.driver.machine_settings.my_home_corner,
+            padding_mm=self.driver.machine_settings.my_home_padding_mm,
+        )
+
+    def on_svg_page_fit_change(self, fits_table: bool | None) -> None:
+        self.svg_bounds_warning_var.set("OUT OF BOUNDS" if fits_table is False else "")
 
     def _restore_active_tab(self) -> None:
         if self.tabs is None:
             return
 
-        allowed_tabs = {"Trace", "Jog", "Machine", "Pen", "Draw Options"}
+        allowed_tabs = {"Trace", "Jog", "Machine", "Pen", "Draw Options", "Log"}
         active_tab = self.settings_service.app_state.active_tab
         if active_tab in {"Speed", "Options"}:
             active_tab = "Draw Options"
@@ -900,6 +932,8 @@ class AppWindow:
 
             if load_result.ok:
                 self._remember_last_svg_file(Path(path))
+                if self.svg_page_preview is not None:
+                    self.svg_page_preview.set_svg(path)
 
             self._update_from_result(load_result, action="Load")
             self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")

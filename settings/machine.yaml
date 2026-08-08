@@ -1,6 +1,6 @@
 baudrate: 115200
 digest: 1
-machine_model: idraw-a1
+machine_model: idraw-a4
 my_home_corner: bottom-left
 my_home_padding_mm: 50.0
 name: machine-default
