@@ -1,18 +1,62 @@
 from __future__ import annotations
 
+import copy
 import os
 import tempfile
 import threading
 import time
+from collections.abc import Callable
 from optparse import Option, OptionParser
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Callable
+from typing import Any
 
 from lxml import etree
 
-from idraw_ui.backend.machine_models import get_machine_model
+from idraw_ui.backend.machine_models import (
+    get_machine_model,
+    logical_home_mirror_axes,
+)
 from idraw_ui.backend.models import MachineSettings, PlotProfile, PlotState
+
+_LOGICAL_HOME_METADATA_KEY = "idraw_ui_logical_home"
+_CONTENT_ORIENTATION_METADATA_KEY = "idraw_ui_content_orientation"
+_UPRIGHT_CONTENT_VERSION = "upright-v1"
+
+
+def _mirror_digest(digest: Any, *, mirror_x: bool, mirror_y: bool) -> None:
+    if not mirror_x and not mirror_y:
+        return
+    for layer in digest.layers:
+        for path in layer.paths:
+            for subpath in path.subpaths:
+                for vertex in subpath:
+                    if mirror_x:
+                        vertex[0] = digest.width - vertex[0]
+                    if mirror_y:
+                        vertex[1] = digest.height - vertex[1]
+
+
+def _apply_logical_home_to_digest(session: Any, home_corner: str) -> None:
+    digest = session.digest
+    if digest.metadata.get(_CONTENT_ORIENTATION_METADATA_KEY) != (
+        _UPRIGHT_CONTENT_VERSION
+    ):
+        _mirror_digest(digest, mirror_x=True, mirror_y=True)
+        digest.metadata[_CONTENT_ORIENTATION_METADATA_KEY] = _UPRIGHT_CONTENT_VERSION
+
+    target_mirror_x, target_mirror_y = logical_home_mirror_axes(home_corner)
+
+    digest.metadata[_LOGICAL_HOME_METADATA_KEY] = home_corner
+    start_x = digest.width if target_mirror_x else 0.0
+    start_y = digest.height if target_mirror_y else 0.0
+    session.params.start_pos_x = start_x
+    session.params.start_pos_y = start_y
+    session.pen.phys.xpos = start_x
+    session.pen.phys.ypos = start_y
+
+    if session.options.digest:
+        session.backup_original = copy.deepcopy(digest.to_plob())
 
 
 def _default_session_factory() -> Any:
@@ -34,6 +78,15 @@ def _default_session_factory() -> Any:
             # while recent ink_extensions.Effect exposes argparse via self.arg_parser.
             self.OptionParser = OptionParser(option_class=LegacyInkOption)
             super().__init__(*args, **kwargs)
+
+        def prepare_document(self) -> bool:
+            if not super().prepare_document():
+                return False
+            _apply_logical_home_to_digest(
+                self,
+                self._idraw_ui_logical_home_corner,
+            )
+            return True
 
     return CompatIDraw(default_logging=False)
 
@@ -102,8 +155,7 @@ class Idraw2InternalRuntime:
         self._started_at = time.time()
         self._state = PlotState.DRAWING
         self._message = "Drawing"
-        source = self._resume_svg_path or self.svg_path
-        self._start_worker(mode="plot", source_svg=source)
+        self._start_worker(mode="plot", source_svg=self.svg_path)
 
     def pause(self) -> None:
         if not self._thread_running():
@@ -215,7 +267,7 @@ class Idraw2InternalRuntime:
                 else:
                     self._state = PlotState.READY
                     self._message = "Plot finished"
-            except Exception as exc:  # pragma: no cover - exercised via public methods
+            except Exception as exc:  # noqa: BLE001  # pragma: no cover
                 self._last_error = exc
                 self._state = PlotState.IDLE
                 self._message = str(exc)
@@ -308,6 +360,9 @@ class Idraw2InternalRuntime:
         options.model = get_machine_model(
             self.machine_settings.machine_model
         ).runtime_model
+        session._idraw_ui_logical_home_corner = (
+            self.machine_settings.my_home_corner.strip().lower()
+        )
 
         if resume_type is not None:
             options.resume_type = resume_type

@@ -259,6 +259,16 @@ def table_relative_jog_vector(
     return x_mm, y_mm
 
 
+def logical_home_mirror_axes(home_corner: str) -> tuple[bool, bool]:
+    normalized = home_corner.strip().lower()
+    if normalized not in MACHINE_HOME_CORNERS:
+        raise ValueError(f"Unknown logical home corner: {home_corner}")
+
+    mirror_x = "top" in normalized
+    mirror_y = "right" in normalized
+    return mirror_x, mirror_y
+
+
 def get_machine_model(model_name: str) -> MachineModelDefinition:
     normalized = model_name.strip().lower()
     normalized = _MODEL_ALIASES.get(normalized, normalized)

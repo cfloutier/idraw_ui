@@ -5,7 +5,6 @@ import tkinter as tk
 import customtkinter as ctk
 
 from idraw_ui.backend.machine_models import (
-    MACHINE_HOME_CORNERS,
     MachineModelDefinition,
     display_axis_vectors,
     display_home_corner,
@@ -26,6 +25,7 @@ class MachineTab:
         self.window = window
         self.tab = tab
         self._table_canvas: tk.Canvas | None = None
+        self._home_dialog: ctk.CTkToplevel | None = None
         self.build()
 
     def build(self) -> None:
@@ -88,11 +88,10 @@ class MachineTab:
             font=ctk.CTkFont(size=13, weight="bold"),
         ).grid(row=6, column=0, sticky="w", padx=8, pady=(3, 2))
 
-        ctk.CTkOptionMenu(
+        ctk.CTkButton(
             frame,
-            values=list(MACHINE_HOME_CORNERS),
-            variable=self.window.machine_home_corner_var,
-            command=self.window.on_machine_home_corner_change,
+            textvariable=self.window.machine_home_corner_var,
+            command=self._open_home_corner_dialog,
             width=240,
         ).grid(row=7, column=0, sticky="w", padx=8, pady=(0, 6))
 
@@ -227,6 +226,84 @@ class MachineTab:
             "write", self._on_machine_model_var_changed
         )
         self._redraw_table_preview()
+
+    def _open_home_corner_dialog(self) -> None:
+        if self._home_dialog is not None and self._home_dialog.winfo_exists():
+            self._home_dialog.focus_set()
+            return
+
+        dialog = ctk.CTkToplevel(self.window.root)
+        self._home_dialog = dialog
+        dialog.title("Choose My home")
+        dialog.transient(self.window.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+        dialog.geometry("420x340")
+
+        self.window.root.update_idletasks()
+        x = self.window.root.winfo_x() + (self.window.root.winfo_width() // 2) - 210
+        y = self.window.root.winfo_y() + (self.window.root.winfo_height() // 2) - 170
+        dialog.geometry(f"+{x}+{y}")
+
+        ctk.CTkLabel(
+            dialog,
+            text="Choose the home corner",
+            font=ctk.CTkFont(size=17, weight="bold"),
+        ).pack(anchor="w", padx=16, pady=(14, 2))
+
+        ctk.CTkLabel(
+            dialog,
+            text="The drawing will extend inward from this corner.",
+        ).pack(anchor="w", padx=16, pady=(0, 10))
+
+        table = ctk.CTkFrame(dialog, corner_radius=8, border_width=2)
+        table.pack(fill="both", expand=True, padx=16, pady=(0, 16))
+        table.grid_columnconfigure((0, 2), weight=0, minsize=120)
+        table.grid_columnconfigure(1, weight=1)
+        table.grid_rowconfigure((0, 2), weight=0, minsize=54)
+        table.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(
+            table,
+            text="Plotter table",
+            font=ctk.CTkFont(size=14, weight="bold"),
+        ).grid(row=1, column=1)
+
+        positions = {
+            "top-left": (0, 0, "Top left"),
+            "top-right": (0, 2, "Top right"),
+            "bottom-left": (2, 0, "Bottom left"),
+            "bottom-right": (2, 2, "Bottom right"),
+        }
+        selected_corner = self.window.machine_home_corner_var.get().strip().lower()
+
+        def close_dialog() -> None:
+            self._home_dialog = None
+            dialog.destroy()
+
+        def select_corner(corner: str) -> None:
+            self.window.on_machine_home_corner_change(corner)
+            close_dialog()
+
+        for corner, (row, column, label) in positions.items():
+            button_kwargs: dict[str, object] = {}
+            if corner == selected_corner:
+                button_kwargs = {
+                    "fg_color": ("#D97706", "#F59E0B"),
+                    "hover_color": ("#B45309", "#D97706"),
+                    "text_color": ("#FFFFFF", "#1A1A1A"),
+                }
+            ctk.CTkButton(
+                table,
+                text=label,
+                width=112,
+                height=46,
+                command=lambda value=corner: select_corner(value),
+                **button_kwargs,
+            ).grid(row=row, column=column, padx=8, pady=8)
+
+        dialog.protocol("WM_DELETE_WINDOW", close_dialog)
+        dialog.after(50, dialog.focus_set)
 
     def _on_machine_model_var_changed(self, *_args: object) -> None:
         self._redraw_table_preview()

@@ -66,7 +66,7 @@ class Idraw2Facade:
 
         try:
             self.runtime.configure(self.machine_settings, self.plot_profile)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Runtime configure failed: {exc}"
 
@@ -76,12 +76,23 @@ class Idraw2Facade:
         machine_settings: MachineSettings | None = None,
         plot_profile: PlotProfile | None = None,
     ) -> None:
+        machine_changed = (
+            machine_settings is not None and machine_settings != self.machine_settings
+        )
         if machine_settings is not None:
             self.machine_settings = machine_settings
         if plot_profile is not None:
             self.plot_profile = plot_profile
 
         self.runtime.configure(self.machine_settings, self.plot_profile)
+        self._is_prepared = False
+        if machine_changed and self.progress.state in {
+            PlotState.PAUSED,
+            PlotState.PAUSING,
+        }:
+            self.runtime.stop()
+            self.progress.state = PlotState.READY
+            self.progress.message = "Machine settings changed; paused plot reset"
 
     def _fail(
         self, message: str, *, state: PlotState | None = None
@@ -103,7 +114,7 @@ class Idraw2Facade:
 
         try:
             status = self.runtime.get_status()
-        except Exception:
+        except Exception:  # noqa: BLE001
             return
 
         state = status.get("state")
@@ -150,7 +161,7 @@ class Idraw2Facade:
 
         try:
             self.runtime.load_svg(svg_path)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._fail(f"Load failed: {exc}", state=PlotState.IDLE)
 
         self.svg_path = svg_path
@@ -168,7 +179,7 @@ class Idraw2Facade:
 
         try:
             metrics = self.runtime.prepare() or {}
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             self._is_prepared = False
             return self._fail(f"Prepare failed: {exc}", state=PlotState.IDLE)
 
@@ -183,8 +194,12 @@ class Idraw2Facade:
 
         self._is_prepared = True
         self.progress.state = PlotState.READY
-        self.progress.message = "Prepared"
-        return EngineCommandResult(ok=True, message="prepared")
+        logical_home = self.machine_settings.my_home_corner.strip().lower()
+        self.progress.message = f"Prepared for logical home: {logical_home}"
+        return EngineCommandResult(
+            ok=True,
+            message=f"prepared for logical home: {logical_home}",
+        )
 
     def start(self) -> EngineCommandResult:
         runtime_error = self._require_runtime()
@@ -199,7 +214,7 @@ class Idraw2Facade:
 
         try:
             self.runtime.start()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._fail(f"Start failed: {exc}", state=PlotState.IDLE)
 
         self.progress.state = PlotState.DRAWING
@@ -216,7 +231,7 @@ class Idraw2Facade:
         self.progress.state = PlotState.PAUSING
         try:
             self.runtime.pause()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._fail(f"Pause failed: {exc}", state=PlotState.DRAWING)
 
         self.progress.state = PlotState.PAUSED
@@ -232,7 +247,7 @@ class Idraw2Facade:
 
         try:
             self.runtime.resume()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._fail(f"Resume failed: {exc}", state=PlotState.PAUSED)
 
         self.progress.state = PlotState.DRAWING
@@ -247,7 +262,7 @@ class Idraw2Facade:
         self.progress.state = PlotState.STOPPING
         try:
             self.runtime.stop()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._fail(f"Stop failed: {exc}", state=PlotState.IDLE)
 
         self.progress.state = PlotState.READY
@@ -262,7 +277,7 @@ class Idraw2Facade:
         self.progress.state = PlotState.HOMING
         try:
             self.runtime.home()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001
             return self._fail(f"Home failed: {exc}", state=PlotState.IDLE)
 
         self.progress.state = PlotState.READY

@@ -7,7 +7,28 @@ import unittest
 from dataclasses import replace
 from types import SimpleNamespace
 
-from idraw_ui.backend.idraw2_runtime import Idraw2InternalRuntime
+from idraw_ui.backend.idraw2_runtime import (
+    Idraw2InternalRuntime,
+    _apply_logical_home_to_digest,
+)
+
+
+class FakeDigest:
+    def __init__(self) -> None:
+        self.width = 4.0
+        self.height = 3.0
+        self.metadata: dict[str, str] = {}
+        path = SimpleNamespace(subpaths=[[[0.5, 0.25], [1.5, 2.25]]])
+        self.layers = [SimpleNamespace(paths=[path])]
+
+
+def _logical_home_session() -> SimpleNamespace:
+    return SimpleNamespace(
+        digest=FakeDigest(),
+        params=SimpleNamespace(start_pos_x=0.0, start_pos_y=0.0),
+        pen=SimpleNamespace(phys=SimpleNamespace(xpos=0.0, ypos=0.0)),
+        options=SimpleNamespace(digest=0),
+    )
 
 
 class FakeSession:
@@ -58,6 +79,45 @@ class FakeSessionFactory:
 
 
 class Idraw2InternalRuntimeTests(unittest.TestCase):
+    def test_logical_home_transform_preserves_content_orientation(self) -> None:
+        expected = {
+            "bottom-right": ([[3.5, 2.75], [2.5, 0.75]], (0.0, 3.0)),
+            "bottom-left": ([[3.5, 2.75], [2.5, 0.75]], (0.0, 0.0)),
+            "top-right": ([[3.5, 2.75], [2.5, 0.75]], (4.0, 3.0)),
+            "top-left": ([[3.5, 2.75], [2.5, 0.75]], (4.0, 0.0)),
+        }
+
+        for home_corner, (expected_vertices, expected_start) in expected.items():
+            with self.subTest(home_corner=home_corner):
+                session = _logical_home_session()
+
+                _apply_logical_home_to_digest(session, home_corner)
+
+                vertices = session.digest.layers[0].paths[0].subpaths[0]
+                self.assertEqual(vertices, expected_vertices)
+                self.assertEqual(
+                    (session.params.start_pos_x, session.params.start_pos_y),
+                    expected_start,
+                )
+                self.assertEqual(
+                    (session.pen.phys.xpos, session.pen.phys.ypos),
+                    expected_start,
+                )
+
+    def test_logical_home_transform_is_idempotent_for_resume_digest(self) -> None:
+        session = _logical_home_session()
+
+        _apply_logical_home_to_digest(session, "top-left")
+        first_vertices = [
+            vertex.copy() for vertex in session.digest.layers[0].paths[0].subpaths[0]
+        ]
+        _apply_logical_home_to_digest(session, "top-left")
+
+        self.assertEqual(
+            session.digest.layers[0].paths[0].subpaths[0],
+            first_vertices,
+        )
+
     def test_prepare_collects_metrics(self) -> None:
         factory = FakeSessionFactory()
         runtime = Idraw2InternalRuntime(session_factory=factory)
@@ -97,6 +157,26 @@ class Idraw2InternalRuntimeTests(unittest.TestCase):
         self.assertEqual(running_status["state"], "drawing")
         self.assertEqual(paused_status["state"], "paused")
         self.assertEqual(paused_status["message"], "Paused")
+
+    def test_start_after_prepare_uses_original_svg(self) -> None:
+        factory = FakeSessionFactory()
+        runtime = Idraw2InternalRuntime(session_factory=factory)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text(
+                "<svg xmlns='http://www.w3.org/2000/svg' id='source'></svg>"
+            )
+
+            runtime.load_svg(svg_path)
+            runtime.prepare()
+            runtime.start()
+            while runtime._thread_running():
+                time.sleep(0.01)
+
+        self.assertGreaterEqual(len(factory.sessions), 2)
+        started_document = factory.sessions[-1].document
+        self.assertEqual(started_document.getroot().get("id"), "source")
 
     def test_resume_uses_resume_mode(self) -> None:
         factory = FakeSessionFactory(wait_for_pause=True)

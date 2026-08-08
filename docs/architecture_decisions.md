@@ -174,6 +174,55 @@ Developer note:
   behavior, but it does not already implement the configurable four-corner home
   model planned here.
 
+### 8) Logical home names follow our visual table convention
+
+Reason:
+- Legacy runtime terminology can describe origins using axis or document
+  conventions that do not match the operator's visual understanding of the table.
+- The UI needs one predictable rule for choosing a home and placing a drawing
+  without leaving the usable machine area.
+
+Result:
+- The selected logical home name always identifies the visual corner of the
+  table used as the drawing anchor.
+- The SVG must extend inward from that corner:
+  - `top-left`: right and down
+  - `top-right`: left and down
+  - `bottom-left`: right and up
+  - `bottom-right`: left and up
+- Physical-axis signs and legacy runtime names must be converted to this
+  convention at the plotting boundary; they must not redefine the UI meaning.
+- Bounds validation and SVG transformation must use this same convention before
+  a real plot starts.
+
+Implementation note:
+- No changes are made to `idraw2_0internal` or `drawcore_plotink`.
+- iDraw still extracts the digest, applies its optional page rotation, and clips
+  it to positive page/machine bounds.
+- The app runtime adapter applies one shared baseline orientation to the digest,
+  then selects only the logical start coordinate:
+  - `bottom-right`: `(0, page height)`
+  - `bottom-left`: `(0, 0)`
+  - `top-right`: `(page width, page height)`
+  - `top-left`: `(page width, 0)`
+- Logical-home selection must not mirror the digest. The selected start corner
+  already makes all positive page coordinates extend inward; an additional
+  home-specific mirror changes the content orientation.
+- The transformed digest is stored in the PLOB resume snapshot with an app
+  metadata marker. Reprocessing the same snapshot is idempotent.
+- A fresh Play starts from the original SVG. PLOB snapshots are reserved for
+  Resume; plotting a prepared PLOB again in `plot` mode makes the vendor runtime
+  rotate its geometry a second time.
+- Changing machine/profile settings invalidates the prepared snapshot and
+  forces a new preparation before Play.
+- Physical tests also established that SVG content was already rotated by 180
+  degrees before the logical-home work. This is a separate baseline orientation
+  issue, not a consequence of corner mirroring.
+- The runtime adapter corrects that baseline with one global 180-degree digest
+  rotation inside the positive page bounds. A versioned PLOB metadata marker
+  (`idraw_ui_content_orientation=upright-v1`) prevents double rotation on Play
+  or Resume. Logical-home start coordinates remain unchanged.
+
 ## Operational notes
 
 - Axis mapping and hardware validation logs are tracked in `docs/hardware_notes.md`.

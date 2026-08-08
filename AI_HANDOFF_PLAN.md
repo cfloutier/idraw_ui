@@ -59,6 +59,47 @@ Additional behavior now in place:
   on startup.
 - Table-relative jog mapping was rewritten to a deterministic, projection-based
   geometry rule to remove apparent random X inversions.
+- The app now owns its logical-home naming convention independently of legacy
+  runtime terminology. The home name is the visual table corner used as anchor,
+  and the drawing always extends inward:
+  - `top-left`: right/down
+  - `top-right`: left/down
+  - `bottom-left`: right/up
+  - `bottom-right`: left/up
+- Initial physical SVG test: a portrait A6 started from table center and drew
+  left/up. Under the app convention this is a `bottom-right` anchor behavior.
+- A logical-home SVG adapter is implemented without vendor edits:
+  - one shared digest orientation is applied after iDraw rotation/clipping
+  - all points remain in positive page bounds
+  - logical start coordinates follow the selected corner
+  - logical-home changes do not mirror content
+  - PLOB metadata prevents duplicate baseline orientation correction
+  - reconfiguration invalidates stale prepared snapshots
+- Software validation passes for all four corner transforms.
+- Three initial A6 physical tests revealed that iDraw digest axes are swapped
+  relative to the visual table axes in the A1 portrait setup:
+  - digest X mirror changes visual top/bottom
+  - digest Y mirror changes visual left/right
+- The historical logical-home mirror matrix selected the expected four zones in
+  the A1 portrait + A6 physical test:
+  - `top-left` -> lower-right
+  - `top-right` -> lower-left
+  - `bottom-left` -> upper-right
+  - `bottom-right` -> upper-left
+- A later `bottom-right` test exposed that the matrix also reflected content
+  horizontally. Home-specific digest mirrors have now been removed while the
+  four start corners remain unchanged. Software validation confirms identical
+  geometry for every home.
+- The SVG content was observed to be rotated by 180 degrees even before the
+  logical-home changes. A separate global digest rotation is now implemented,
+  versioned with `idraw_ui_content_orientation=upright-v1` in the PLOB so it is
+  idempotent across Play/Resume. Fresh plots now start from the original SVG,
+  because replaying the prepared PLOB in `plot` mode caused another vendor-side
+  180-degree rotation.
+- Final physical validation passes for all four logical homes with the A6 test
+  SVG on the A1 portrait setup. Every drawing reaches its expected zone with
+  upright, non-reflected content. Preserve this behavior as the portrait
+  regression baseline.
 
 Current UI shape:
 
@@ -86,6 +127,11 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 - During trace execution, adapt orientation so the drawing is placed correctly
   for the selected table/machine conventions.
+- The four portrait logical-home choices are physically validated on A1/A6;
+  preserve this matrix as a regression baseline.
+- Enforce bounds so the transformed SVG cannot leave the usable plotter area.
+- Validate portrait first, then design and validate the landscape mapping
+  separately; do not infer it solely from the portrait result.
 
 2. Post-load SVG preview mode
 

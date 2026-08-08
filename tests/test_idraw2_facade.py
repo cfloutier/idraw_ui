@@ -173,6 +173,22 @@ class Idraw2FacadeTests(unittest.TestCase):
         self.assertIn("prepare", runtime.calls)
         self.assertIn("start", runtime.calls)
 
+    def test_reconfigure_invalidates_prepared_svg(self) -> None:
+        runtime = FakeRuntime()
+        facade = Idraw2Facade(runtime=runtime)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+            self.assertTrue(facade.load_svg(svg_path).ok)
+            self.assertTrue(facade.prepare().ok)
+            prepare_count = runtime.calls.count("prepare")
+
+            facade.reconfigure(machine_settings=facade.machine_settings)
+            self.assertTrue(facade.start().ok)
+
+        self.assertEqual(runtime.calls.count("prepare"), prepare_count + 1)
+
     def test_pause_resume_transitions(self) -> None:
         runtime = FakeRuntime()
         facade = Idraw2Facade(runtime=runtime)
