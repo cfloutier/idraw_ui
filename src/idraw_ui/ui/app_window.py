@@ -953,10 +953,8 @@ class AppWindow:
             self._loading_started_at = None
             self._loading_stage_started_at = None
 
-            if load_result.ok:
-                self._remember_last_svg_file(Path(path))
-                if self.svg_page_preview is not None:
-                    self.svg_page_preview.set_svg(path)
+            if load_result.ok and self.svg_page_preview is not None:
+                self.svg_page_preview.set_svg(path)
 
             self._update_from_result(load_result, action="Load")
             self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")
@@ -1027,7 +1025,13 @@ class AppWindow:
             self._refresh_view()
             return
 
-        self._update_from_result(self.driver.stop())
+        def _stop_and_return() -> DriverCommandResult:
+            result = self.driver.stop()
+            if result.ok:
+                self.driver.return_to_start()
+            return result
+
+        self._run_manual_action_async("Stop", _stop_and_return)
 
     def on_connect(self) -> None:
         self._update_from_result(self.driver.connect())

@@ -198,6 +198,7 @@ class Idraw2InternalRuntime:
             self._pause_event.set()
             self._join_active_thread()
             self._raise_if_worker_failed()
+        self._pause_event.clear()  # must clear so the next session can run
         self._state = PlotState.READY
         self._message = "Stopped"
 
@@ -206,6 +207,7 @@ class Idraw2InternalRuntime:
         if source is None:
             raise RuntimeError("No SVG loaded")
 
+        self._pause_event.clear()  # guard: stop() may have left the event set
         session = self._build_session(
             mode="resume",
             preview=False,

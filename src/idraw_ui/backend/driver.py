@@ -133,7 +133,25 @@ class Driver:
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
+    def _probe_machine(self) -> DriverCommandResult | None:
+        """Return an error if the machine serial port cannot be opened."""
+        try:
+            self.bridge.connect()
+            self.bridge.disconnect()
+        except VendorBridgeError as exc:
+            return DriverCommandResult(
+                ok=False, message=f"Machine not reachable: {exc}"
+            )
+        except Exception as exc:  # noqa: BLE001
+            return DriverCommandResult(
+                ok=False, message=f"Machine not reachable: {exc}"
+            )
+        return None
+
     def start(self) -> DriverCommandResult:
+        probe = self._probe_machine()
+        if probe is not None:
+            return probe
         release_error = self._release_bridge_for_plot_runtime()
         if release_error is not None:
             return release_error
@@ -150,6 +168,9 @@ class Driver:
         return DriverCommandResult(ok=result.ok, message=result.message)
 
     def resume(self) -> DriverCommandResult:
+        probe = self._probe_machine()
+        if probe is not None:
+            return probe
         release_error = self._release_bridge_for_plot_runtime()
         if release_error is not None:
             return release_error
@@ -169,6 +190,20 @@ class Driver:
         self, listener: Callable[[PlotProfile], None]
     ) -> None:
         self._profile_change_listeners.append(listener)
+
+    def return_to_start(self) -> DriverCommandResult:
+        """Return pen to pre-plot position using the vendor's resume-home mode."""
+        try:
+            release_error = self._release_bridge_for_plot_runtime()
+            if release_error is not None:
+                return release_error
+            result = self.plot_facade.home()
+            self._sync_progress(self.plot_facade.get_progress())
+            return DriverCommandResult(ok=result.ok, message=result.message)
+        except Exception as exc:  # noqa: BLE001
+            return DriverCommandResult(
+                ok=False, message=f"Return to start failed: {exc}"
+            )
 
     def _notify_profile_change_listeners(self) -> None:
         for listener in list(self._profile_change_listeners):
