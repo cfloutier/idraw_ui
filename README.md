@@ -214,7 +214,6 @@ serial_timeout: 1.0
 - Hardware observations and validated axis mapping: `docs/hardware_notes.md`
 - Architecture, pipeline details, developer notes: `docs/developer_notes.md`
 
-
 ## Mandatory safety test before first use
 
 Run this procedure before using the application with a machine that has not yet
@@ -349,46 +348,11 @@ corner, which firmware axis drives the long side, and the observed directions
 of short `+X` and `+Y` jogs from the center. These facts are required to create a
 definition that can be validated safely.
 
-## Recent progress (Aug 2026)
-
-The following behavior is now implemented in the MVP UI and backend:
-
-- Machine model metadata now defines explicit axis conventions
-	(`long_axis_is_y`, `x_axis_toward_home`, `y_axis_toward_home`).
-- `Home` semantics are split clearly:
-	- `Physical Home`: firmware/microswitch home.
-	- `My home`: selected corner plus four configurable drawing margins.
-- `Center` now computes a real machine center move from machine geometry
-	and table orientation.
-- Machine tab now includes:
-	- `My home` corner selector.
-	- Integer top, bottom, left, and right drawing margins (mm).
-	- Preview rendering for physical home, selected home, and the usable inset area.
-	- Orientation helper text clarifying this is the physical placement of the
-		plotter on the table and that it affects jog directions.
-- Jog tab now includes two modes:
-	- `physical`: `+X/-X/+Y/-Y`
-	- `table`: `right/left/forward/backward`
-- Jog mode is persisted in `settings/app_state.yaml` (app-level state,
-	independent from drawing profiles).
-- Table-relative jog direction mapping is deterministic and geometry-based
-	(no heuristic axis flip).
-
 ## Next milestones
 
 Planned work, in current priority order:
 
-1. Adapt tracing orientation so drawings are placed correctly relative to the
-	 selected machine/table setup.
-2. Add a post-load SVG preview mode showing the SVG footprint/gabarit against
-	 the table and current Machine tab choices.
-3. Apply correct SVG orientation automatically, potentially by transforming the
-	 SVG on the fly.
-4. Before proposing the positioning-mark tool, run a full README pass to split
-	 developer-oriented notes from user-facing documentation.
-5. Add a positioning-mark tool to draw page placement marks on the table.
-6. Refine time-estimation calculations.
-7. Investigate and fix remaining Play/Pause edge cases, especially missing
+1. Investigate and fix remaining Play/Pause edge cases, especially missing
 	 points in dot-heavy drawings.
 
 ## DrawCore dependency
