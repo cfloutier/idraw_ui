@@ -1,0 +1,12 @@
+baudrate: 115200
+digest: 1
+drawing_margin_bottom_mm: 0
+drawing_margin_left_mm: 0
+drawing_margin_right_mm: 0
+drawing_margin_top_mm: 0
+machine_model: idraw-a3
+my_home_corner: bottom-left
+name: machine-default
+port: null
+serial_timeout: 1.0
+table_orientation: portrait

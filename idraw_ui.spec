@@ -18,15 +18,11 @@ datas = []
 # CustomTkinter ships images and themes that must travel with the binary
 datas += collect_data_files("customtkinter")
 
-# User-facing defaults bundled in the distribution folder
+# Bundle clean distribution defaults (not the developer's personal settings)
 datas += [
-    (str(root / "profiles"), "profiles"),
+    (str(root / "defaults" / "profiles"), "profiles"),
+    (str(root / "defaults" / "settings"), "settings"),
     (str(root / "test_svg_files"), "test_svg_files"),
-]
-
-# Default machine and app-state templates (user settings will be written here at runtime)
-datas += [
-    (str(root / "settings"), "settings"),
 ]
 
 # ── hidden imports ───────────────────────────────────────────────────────────

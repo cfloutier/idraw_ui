@@ -2,11 +2,14 @@
 setlocal
 
 set DIST_NAME=idraw_ui
-set ZIP_NAME=idraw_ui_dist.zip
 set IDRAW2_SRC=C:\dev\__tracer\idraw2_internal
 
-echo === Installing PyInstaller ===
 call .venv\Scripts\activate.bat
+
+echo === Reading version from pyproject.toml ===
+for /f "delims=" %%v in ('.venv\Scripts\python.exe -c "import tomllib; v=tomllib.load(open(\"pyproject.toml\",\"rb\"))[\"project\"][\"version\"]; print(v)"') do set VERSION=%%v
+set ZIP_NAME=idraw_ui_v%VERSION%.zip
+echo Version: %VERSION% ^| Archive: %ZIP_NAME%
 
 echo === Reinstalling idraw2_0internal non-editable for bundling ===
 pip install --no-deps "%IDRAW2_SRC%" --quiet

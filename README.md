@@ -5,60 +5,13 @@ the pen and speed, choose a drawing zone, and plot.
 
 ---
 
-## Requirements
-
-- **Tested on Windows 10/11** (64-bit). The application has not been tested on
-  Linux or macOS but uses only cross-platform libraries and should work without
-  changes on those platforms.
-- **Python 3.10 or later**
-  → Download from <https://www.python.org/downloads/> and make sure to tick
-  **"Add Python to PATH"** during installation.
-
----
-
 ## Installation
 
-Open a PowerShell window in the project folder and run these three commands in
-order.
+Download the latest release ZIP from the repository, unzip it anywhere, and
+double-click **`idraw_ui.exe`** — no Python installation required.
 
-**1 — Create a virtual environment**
-
-```powershell
-python -m venv .venv
-```
-
-**2 — Activate it**
-
-```powershell
-.\.venv\Scripts\Activate.ps1
-```
-
-> If PowerShell refuses with an execution-policy error, run this once first:
-> ```powershell
-> Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned
-> ```
-
-**3 — Install dependencies**
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
----
-
-## Launching the application
-
-**Windows**
-
-```powershell
-.\run.bat
-```
-
-**Linux / macOS** (make the script executable once: `chmod +x run.sh`)
-
-```bash
-./run.sh
-```
+> For developers who want to run from source or contribute, see
+> [`docs/developer_notes.md`](docs/developer_notes.md).
 
 ---
 
