@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="210.000mm" height="297.000mm"
-     viewBox="0 0 210.000 297.000">
-  <path d="M 20.200 0.200 L 0.200 0.200 L 0.200 20.200" fill="none" stroke="black" stroke-width="0.3"/>
-  <path d="M 189.800 0.200 L 209.800 0.200 L 209.800 20.200" fill="none" stroke="black" stroke-width="0.3"/>
-  <path d="M 20.200 296.800 L 0.200 296.800 L 0.200 276.800" fill="none" stroke="black" stroke-width="0.3"/>
-  <path d="M 189.800 296.800 L 209.800 296.800 L 209.800 276.800" fill="none" stroke="black" stroke-width="0.3"/>
-</svg>

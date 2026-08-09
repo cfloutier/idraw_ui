@@ -5,6 +5,12 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.1] — 2026-08-09
+
+### Fixes
+- default tab is machine when starting with the app
+- added a app_state.yaml default settings 
+
 ## [0.9.0] — 2026-08-09
 
 ### Added
