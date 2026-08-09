@@ -21,8 +21,10 @@ class JogTab:
 
         frame = ctk.CTkFrame(self.tab, corner_radius=12)
         frame.grid(row=0, column=0, sticky="nsew", padx=4, pady=4)
-        frame.grid_columnconfigure(0, weight=2)  # left: jog pad + slider
-        frame.grid_columnconfigure(1, weight=1)  # right: position + margin
+        frame.grid_columnconfigure(
+            0, weight=5, minsize=500
+        )  # left: jog pad + slider (fixed)
+        frame.grid_columnconfigure(1, weight=0, minsize=100)  # right: position + margin
 
         # ── top bar (spans both columns) ──────────────────────────────────
         nav_bar = ctk.CTkFrame(frame, fg_color="transparent")
@@ -104,30 +106,21 @@ class JogTab:
 
         btn_grid = ctk.CTkFrame(left, fg_color="transparent")
         btn_grid.grid(row=5, column=0, sticky="ew")
-        btn_grid.grid_columnconfigure((0, 1), weight=1)
+        btn_grid.grid_columnconfigure((0, 1, 2), weight=1)
 
-        for _idx, (_label, _side) in enumerate(
-            [
-                ("Set Top", "top"),
-                ("Set Bottom", "bottom"),
-                ("Set Left", "left"),
-                ("Set Right", "right"),
-            ]
+        # cross layout matching the jog pad (top centre, left/right middle, bottom centre)
+        for _label, _side, _r, _c in (
+            ("Set Top", "top", 0, 1),
+            ("Set Left", "left", 1, 0),
+            ("Set Right", "right", 1, 2),
+            ("Set Bottom", "bottom", 2, 1),
         ):
-            _col = _idx % 2
-            _row = _idx // 2
             ctk.CTkButton(
                 btn_grid,
                 text=_label,
                 command=lambda s=_side: self.window.on_jog_set_margin(s),
                 height=36,
-            ).grid(
-                row=_row,
-                column=_col,
-                sticky="ew",
-                padx=(0, 3) if _col == 0 else (3, 0),
-                pady=3,
-            )
+            ).grid(row=_r, column=_c, sticky="ew", padx=3, pady=3)
 
         # ── left column: jog pad + distance slider ───────────────────────
         jog_pad = ctk.CTkFrame(frame, fg_color="transparent")

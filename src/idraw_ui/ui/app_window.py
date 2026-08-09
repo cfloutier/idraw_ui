@@ -331,6 +331,14 @@ class AppWindow:
             update_warning_state(value)
             command(value)
 
+        def _sync_label(*_args: object) -> None:
+            # keeps the label in sync when the variable is set programmatically
+            val = variable.get()
+            value_var.set(format_float(val))
+            update_warning_state(val)
+
+        variable.trace_add("write", _sync_label)
+
         ctk.CTkLabel(block, text=label, font=ctk.CTkFont(weight="bold")).grid(
             row=0, column=0, sticky="w"
         )

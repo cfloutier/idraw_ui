@@ -365,6 +365,8 @@ class Idraw2InternalRuntime:
             options.speed_pendown = self.plot_profile.speed_pendown
             options.speed_penup = self.plot_profile.speed_penup
         options.accel = self.plot_profile.accel
+        options.pen_pos_up = self.plot_profile.pen_up_height
+        options.pen_pos_down = self.plot_profile.pen_down_height
         # landscape: vendor auto_rotate conflicts with our correction; portrait: needed
         is_landscape_mode = (
             self.machine_settings.table_orientation.strip().lower() == "landscape"
