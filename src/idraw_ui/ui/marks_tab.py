@@ -17,6 +17,10 @@ _PAGE_SIZES_MM: dict[str, tuple[int, int]] = {
     "Grand Raisin": (900, 650),
     "Raisin": (650, 500),
     "Demi-Raisin": (500, 325),
+    "Tabloid": (432, 279),  # 17" × 11"
+    "Letter": (279, 216),  # 11" × 8.5"
+    "Legal": (356, 216),  # 14" × 8.5"
+    "Half Letter": (216, 140),  # 8.5" × 5.5"
 }
 
 _CANVAS_MARGIN = 20

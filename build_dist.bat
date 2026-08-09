@@ -30,9 +30,9 @@ if errorlevel 1 (
 echo === Restoring editable install for development ===
 pip install --no-deps -e "%IDRAW2_SRC%" --quiet
 
-echo === Creating zip archive ===
-powershell -Command "Compress-Archive -Path 'dist\%DIST_NAME%\*' -DestinationPath '%ZIP_NAME%' -Force"
+echo === Creating zip archive in release\ ===
+if not exist release mkdir release
+powershell -Command "Compress-Archive -Path 'dist\%DIST_NAME%\*' -DestinationPath 'release\%ZIP_NAME%' -Force"
 
 echo.
-echo Done. Distribute: %ZIP_NAME%
-echo User only needs to unzip and run: %DIST_NAME%\idraw_ui.exe
+echo Done. release\%ZIP_NAME%

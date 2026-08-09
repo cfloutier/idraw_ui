@@ -5,6 +5,28 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.0] — 2026-08-09
+
+### Added
+- US paper sizes in the Marks tab: Tabloid (432 × 279 mm), Letter (279 × 216 mm), Legal (356 × 216 mm), Half Letter (216 × 140 mm)
+- Physical pause button now correctly detected — UI shows Paused state and Resume button; previously treated as "Plot finished"
+- Standalone distribution build (`build_dist.bat`) producing a versioned ZIP in `release/`; no Python required for end users
+- `tag_release.bat` — creates and pushes the git tag matching the current version
+- Default machine settings bundled in distribution: iDraw A3, portrait orientation, home at bottom-left corner
+- Estimation time displayed in status bar and log after SVG load
+- `PyInstaller` added to `requirements.txt`
+
+### Fixed
+- `_pause_event` not cleared after stop, causing return-to-start session to abort immediately
+- Slider value labels not updating when Reset button is pressed
+- Load SVG dialog opening in temp folder after Plot marks
+
+### Changed
+- README rewritten for end users (zip/exe distribution); developer setup moved to `docs/developer_notes.md`
+- UI poll interval reduced to 500 ms
+
+---
+
 ## [0.8.0] — 2026-08-09
 
 ### Added
