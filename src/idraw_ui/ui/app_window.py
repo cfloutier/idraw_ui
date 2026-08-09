@@ -167,7 +167,7 @@ class AppWindow:
         self._build_layout()
         self._restore_last_svg_file()
         self._refresh_view()
-        self.root.after(400, self._poll_progress)
+        self.root.after(500, self._poll_progress)
 
     @classmethod
     def from_config_files(
@@ -601,7 +601,7 @@ class AppWindow:
 
     def _poll_progress(self) -> None:
         self._refresh_view()
-        self.root.after(400, self._poll_progress)
+        self.root.after(500, self._poll_progress)
 
     def _apply_plot_profile(self, **changes: object) -> None:
         self.driver.update_plot_profile(**changes)
@@ -976,11 +976,14 @@ class AppWindow:
 
             if estimate_result is not None:
                 self._update_from_result(estimate_result, action="Estimate")
-                if estimate_elapsed is not None:
-                    self._append_trace_log(
-                        f"Estimate duration: {estimate_elapsed:.2f}s"
-                    )
                 estimate_txt = format_duration(estimate_value)
+                elapsed_str = (
+                    f"{estimate_elapsed:.1f}s" if estimate_elapsed is not None else "?"
+                )
+                summary = f"Estimated: {estimate_txt}  (computed in {elapsed_str})"
+                self._set_status_message(f"OK: {summary}")
+                self._set_status_style(ok=True)
+                self._append_trace_log(summary)
                 speed_penup_mm_min = float(self.driver.plot_profile.speed_penup)
                 speed_pendown_mm_min = float(self.driver.plot_profile.speed_pendown)
                 speed_penup_in_s = _mm_min_to_inch_s(speed_penup_mm_min)
