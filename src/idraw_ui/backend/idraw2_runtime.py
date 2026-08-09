@@ -272,7 +272,10 @@ class Idraw2InternalRuntime:
                 session.effect()
                 self._persist_resume_snapshot(session)
                 self._last_metrics = self._extract_metrics(session)
-                if self._pause_event.is_set():
+                hw_stopped = getattr(
+                    getattr(session, "plot_status", None), "stopped", 0
+                )
+                if self._pause_event.is_set() or hw_stopped != 0:
                     self._state = PlotState.PAUSED
                     self._message = "Paused"
                 else:

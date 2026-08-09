@@ -82,6 +82,9 @@ The main operating page.
 | **Reordering** | Path optimisation level before plotting (Least / Basic / Full / None). |
 | **Play** | Start plotting. Triggers a fast estimate first; the progress bar shows expected duration. |
 | **Pause / Stop** | Interrupt the current plot. |
+| **Resume** | Continue a paused plot from where it stopped. |
+
+The physical pause button on the machine also pauses the plot mid-stroke. The application detects this and shows the **Resume** button — press it in the interface to continue. Pressing the physical button a second time does **not** resume; use **Resume** in the UI instead.
 | **Home** | Raise the pen, home the machine to the physical limit switches, then move to the configured logical home corner. |
 | **Center** | Move the carriage to the centre of the table. |
 | **Pen Up / Pen Down** | Manually raise or lower the pen. |
