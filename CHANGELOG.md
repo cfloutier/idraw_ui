@@ -29,6 +29,24 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
   - Trace log now shows `Plot finished: estimated Xs, actual Ys (Z%)` right when a
     real plot completes, and the "Estimate inputs" diagnostic log now also
     includes `pen_lifts`, both distances, and `digest`.
+  - `svg_calibration/` — 8 purpose-built test SVGs (see `svg_calibration/README.md`)
+    isolating pen-lift count, pen-down distance, and pen-up hop length/count
+    independently, to gather clean calibration data instead of only ever seeing
+    these effects mixed together as in a real drawing.
+
+### Fixed
+- `idraw2_internal` (vendor): `dripfeed.feed_sm()` real-mode plotting sleeps
+  `move_time - 30 ms` for every motion sub-command longer than 50 ms (compensating
+  for serial/transmission overhead), but preview mode always added the full
+  `move_time` to the estimate — never mirroring that 30 ms discount. Invisible on
+  drawings with few or short motion segments, but on drawings with many long
+  (> 50 ms) segments — e.g. many separated, non-trivial pen-up hops — this
+  compounded into a large, systematic overestimate. Root-caused with the
+  `svg_calibration/` test set: an isolated single long pen-up hop stayed accurate
+  (~100-103%) at any speed, many short hops stayed accurate (100.0%), but many
+  *repeated long* hops reached as low as 74% (properties of 03/06 not shared by
+  07/08) — pinpointing the per-segment, length-gated discount as the missing
+  piece. Preview now applies the same discount.
 
 ## [0.9.2] — 2026-08-12
 

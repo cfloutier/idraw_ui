@@ -149,9 +149,16 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
   actual duration + drawing/profile metadata to
   `logs/time_estimation_calibration.csv` (gitignored), and the trace log shows
   `Plot finished: estimated Xs, actual Ys` immediately.
-- **Still needed**: run a batch of real test plots (the `test_svg_files/` set is
-  a reasonable spread of "few strokes" to "many strokes") to collect real
-  calibration data, then derive/tune the actual timing constants from it.
+- Root-caused a second issue (v0.10.0) using the `svg_calibration/` set (see
+  `svg_calibration/README.md`): real-mode `dripfeed.feed_sm()` sleeps
+  `move_time - 30 ms` for every motion sub-command over 50 ms, but preview
+  never mirrored that discount — invisible normally, but compounds into a large
+  overestimate on drawings with many long pen-up hops (down to ~74% estimated
+  vs. actual on the worst calibration case). Fixed in `idraw2_internal`.
+- **Still needed**: re-run the `svg_calibration/` set (especially `03`, `05`,
+  `06`, which showed the biggest gaps) after this fix, plus the pen-height
+  sweep on `06`/`07`, to see how much of the remaining gap (if any) is left and
+  whether `PenLiftTiming`'s constants themselves still need tuning.
 
 3. Play/Pause reliability fixes
 

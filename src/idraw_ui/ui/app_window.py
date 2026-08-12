@@ -1020,9 +1020,7 @@ class AppWindow:
             )
         return None
 
-    def _confirm_play(self) -> bool:
-        warning = self._play_warning()
-
+    def _confirm_play(self, warning: tuple[str, tuple[str, str]] | None) -> bool:
         dialog = ctk.CTkToplevel(self.root)
         dialog.title("Confirm Play")
         dialog.transient(self.root)
@@ -1096,7 +1094,8 @@ class AppWindow:
         if progress.state == PlotState.PAUSED:
             self._update_from_result(self.driver.resume())
         else:
-            if not self._confirm_play():
+            warning = self._play_warning()
+            if warning is not None and not self._confirm_play(warning):
                 self._append_trace_log("Play cancelled by user.")
                 return
             self._update_from_result(self.driver.start())
