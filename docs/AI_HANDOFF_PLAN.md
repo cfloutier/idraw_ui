@@ -64,6 +64,10 @@ Additional behavior now in place:
   on startup.
 - Table-relative jog mapping was rewritten to a deterministic, projection-based
   geometry rule to remove apparent random X inversions.
+- Jog tab: live position display and Set Margin buttons for margin setup from hardware.
+- All Home/Center actions raise pen before homing; `_move_and_wait()` delays UI
+  status until machine physically settles.
+- `auto_rotate` and `preview` removed from profiles (handled internally).
 - The app now owns its logical-home naming convention independently of legacy
   runtime terminology. The home name is the visual table corner used as anchor,
   and the drawing always extends inward:
@@ -128,22 +132,16 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 ## Next plans (from current project direction)
 
-
-
-2. Post-load SVG preview mode
+1. Post-load SVG preview mode
 
 - After loading an SVG, show a preview of the SVG footprint/gabarit as read from
   the file against the table and current Machine tab choices.
 
-
-
-
-
-5. Time-estimation refinement
+2. Time-estimation refinement
 
 - Improve and calibrate time-estimation calculations.
 
-6. Play/Pause reliability fixes
+3. Play/Pause reliability fixes
 
 - Investigate and fix remaining Play/Pause edge cases.
 - Specific priority: dot-heavy jobs where points are currently lost.

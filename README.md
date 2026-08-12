@@ -11,7 +11,7 @@ Download the latest release ZIP from the repository, unzip it anywhere, and
 double-click **`idraw_ui.exe`** — no Python installation required.
 
 > For developers who want to run from source or contribute, see
-> [`docs/developer_notes.md`](docs/developer_notes.md).
+> [`docs/dev_setup.md`](docs/dev_setup.md).
 
 ---
 
