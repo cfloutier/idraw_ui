@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -67,6 +68,7 @@ class Idraw2Facade:
         try:
             self.runtime.configure(self.machine_settings, self.plot_profile)
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Runtime configure failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Runtime configure failed: {exc}"
 
@@ -76,9 +78,7 @@ class Idraw2Facade:
         machine_settings: MachineSettings | None = None,
         plot_profile: PlotProfile | None = None,
     ) -> None:
-        machine_changed = (
-            machine_settings is not None and machine_settings != self.machine_settings
-        )
+        machine_changed = machine_settings is not None and machine_settings != self.machine_settings
         if machine_settings is not None:
             self.machine_settings = machine_settings
         if plot_profile is not None:
@@ -94,9 +94,7 @@ class Idraw2Facade:
             self.progress.state = PlotState.READY
             self.progress.message = "Machine settings changed; paused plot reset"
 
-    def _fail(
-        self, message: str, *, state: PlotState | None = None
-    ) -> EngineCommandResult:
+    def _fail(self, message: str, *, state: PlotState | None = None) -> EngineCommandResult:
         if state is not None:
             self.progress.state = state
         self.progress.message = message
@@ -115,6 +113,7 @@ class Idraw2Facade:
         try:
             status = self.runtime.get_status()
         except Exception:  # noqa: BLE001
+            logging.exception("Runtime status refresh failed")
             return
 
         state = status.get("state")
@@ -124,7 +123,7 @@ class Idraw2Facade:
             try:
                 self.progress.state = PlotState(state)
             except ValueError:
-                pass
+                logging.exception("Unknown plot state string from runtime")
 
         estimated_seconds = status.get("estimated_seconds")
         if estimated_seconds is not None:
@@ -162,6 +161,7 @@ class Idraw2Facade:
         try:
             self.runtime.load_svg(svg_path)
         except Exception as exc:  # noqa: BLE001
+            logging.exception("SVG load failed")
             return self._fail(f"Load failed: {exc}", state=PlotState.IDLE)
 
         self.svg_path = svg_path
@@ -180,11 +180,13 @@ class Idraw2Facade:
         try:
             metrics = self.runtime.prepare() or {}
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Prepare failed")
             self._is_prepared = False
             return self._fail(f"Prepare failed: {exc}", state=PlotState.IDLE)
 
         if "estimated_seconds" in metrics:
-            self.progress.estimated_seconds = float(metrics["estimated_seconds"])
+            estimated_seconds = metrics["estimated_seconds"]
+            self.progress.estimated_seconds = float(estimated_seconds) if estimated_seconds is not None else None
         if "distance_pen_down_mm" in metrics:
             self.progress.distance_pen_down_mm = float(metrics["distance_pen_down_mm"])
         if "distance_total_mm" in metrics:
@@ -215,6 +217,7 @@ class Idraw2Facade:
         try:
             self.runtime.start()
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Start failed")
             return self._fail(f"Start failed: {exc}", state=PlotState.IDLE)
 
         self.progress.state = PlotState.DRAWING
@@ -232,6 +235,7 @@ class Idraw2Facade:
         try:
             self.runtime.pause()
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Pause failed")
             return self._fail(f"Pause failed: {exc}", state=PlotState.DRAWING)
 
         self.progress.state = PlotState.PAUSED
@@ -248,6 +252,7 @@ class Idraw2Facade:
         try:
             self.runtime.resume()
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Resume failed")
             return self._fail(f"Resume failed: {exc}", state=PlotState.PAUSED)
 
         self.progress.state = PlotState.DRAWING
@@ -263,6 +268,7 @@ class Idraw2Facade:
         try:
             self.runtime.stop()
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Stop failed")
             return self._fail(f"Stop failed: {exc}", state=PlotState.IDLE)
 
         self.progress.state = PlotState.READY
@@ -278,6 +284,7 @@ class Idraw2Facade:
         try:
             self.runtime.home()
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Home failed")
             return self._fail(f"Home failed: {exc}", state=PlotState.IDLE)
 
         self.progress.state = PlotState.READY

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import time
 from collections.abc import Callable
@@ -57,8 +58,7 @@ class Driver:
                 pen_down_command=self.plot_profile.pen_down_command,
                 pen_up_z=self.plot_profile.pen_up_height,
                 pen_down_z=self.plot_profile.pen_down_height,
-                pen_move_speed=self.plot_profile.pen_move_speed
-                or self.plot_profile.speed_penup,
+                pen_move_speed=self.plot_profile.pen_move_speed or self.plot_profile.speed_penup,
                 speed_penup=self.plot_profile.speed_penup,
                 speed_pendown=self.plot_profile.speed_pendown,
             )
@@ -81,10 +81,12 @@ class Driver:
             self.progress.message = "Connected"
             return DriverCommandResult(ok=True, message="connected")
         except VendorBridgeError as exc:
+            logging.exception("Connect failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Connect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Connect failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Connect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
@@ -96,10 +98,12 @@ class Driver:
             self.progress.message = "Disconnected"
             return DriverCommandResult(ok=True, message="disconnected")
         except VendorBridgeError as exc:
+            logging.exception("Disconnect failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Disconnect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Disconnect failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Disconnect failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
@@ -111,9 +115,11 @@ class Driver:
             self.progress.message = f"Status: {status}"
             return DriverCommandResult(ok=True, message=status)
         except VendorBridgeError as exc:
+            logging.exception("Status failed")
             self.progress.message = f"Status failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Status failed")
             self.progress.message = f"Status failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
@@ -139,13 +145,11 @@ class Driver:
             self.bridge.connect()
             self.bridge.disconnect()
         except VendorBridgeError as exc:
-            return DriverCommandResult(
-                ok=False, message=f"Machine not reachable: {exc}"
-            )
+            logging.exception("Machine probe failed")
+            return DriverCommandResult(ok=False, message=f"Machine not reachable: {exc}")
         except Exception as exc:  # noqa: BLE001
-            return DriverCommandResult(
-                ok=False, message=f"Machine not reachable: {exc}"
-            )
+            logging.exception("Machine probe failed")
+            return DriverCommandResult(ok=False, message=f"Machine not reachable: {exc}")
         return None
 
     def start(self) -> DriverCommandResult:
@@ -186,9 +190,7 @@ class Driver:
         self._sync_progress(self.plot_facade.get_progress())
         return DriverCommandResult(ok=result.ok, message=result.message)
 
-    def add_profile_change_listener(
-        self, listener: Callable[[PlotProfile], None]
-    ) -> None:
+    def add_profile_change_listener(self, listener: Callable[[PlotProfile], None]) -> None:
         self._profile_change_listeners.append(listener)
 
     def return_to_start(self) -> DriverCommandResult:
@@ -201,9 +203,8 @@ class Driver:
             self._sync_progress(self.plot_facade.get_progress())
             return DriverCommandResult(ok=result.ok, message=result.message)
         except Exception as exc:  # noqa: BLE001
-            return DriverCommandResult(
-                ok=False, message=f"Return to start failed: {exc}"
-            )
+            logging.exception("Return to start failed")
+            return DriverCommandResult(ok=False, message=f"Return to start failed: {exc}")
 
     def _notify_profile_change_listeners(self) -> None:
         for listener in list(self._profile_change_listeners):
@@ -215,9 +216,7 @@ class Driver:
         self.bridge.pen_down_command = self.plot_profile.pen_down_command
         self.bridge.pen_up_z = self.plot_profile.pen_up_height
         self.bridge.pen_down_z = self.plot_profile.pen_down_height
-        self.bridge.pen_move_speed = (
-            self.plot_profile.pen_move_speed or self.plot_profile.speed_penup
-        )
+        self.bridge.pen_move_speed = self.plot_profile.pen_move_speed or self.plot_profile.speed_penup
         self.bridge.speed_penup = self.plot_profile.speed_penup
         self.bridge.speed_pendown = self.plot_profile.speed_pendown
         self.plot_facade.reconfigure(
@@ -266,18 +265,12 @@ class Driver:
             target_corner = self.machine_settings.my_home_corner.strip().lower()
             machine = get_machine_model(self.machine_settings.machine_model)
             orientation = self.machine_settings.table_orientation.strip().lower()
-            display_width_mm = (
-                machine.height_mm if orientation == "portrait" else machine.width_mm
-            )
-            display_height_mm = (
-                machine.width_mm if orientation == "portrait" else machine.height_mm
-            )
+            display_width_mm = machine.height_mm if orientation == "portrait" else machine.width_mm
+            display_height_mm = machine.width_mm if orientation == "portrait" else machine.height_mm
             if (
-                self.machine_settings.drawing_margin_left_mm
-                + self.machine_settings.drawing_margin_right_mm
+                self.machine_settings.drawing_margin_left_mm + self.machine_settings.drawing_margin_right_mm
                 >= display_width_mm
-                or self.machine_settings.drawing_margin_top_mm
-                + self.machine_settings.drawing_margin_bottom_mm
+                or self.machine_settings.drawing_margin_top_mm + self.machine_settings.drawing_margin_bottom_mm
                 >= display_height_mm
             ):
                 raise ValueError("Drawing margins leave no usable machine area")
@@ -368,10 +361,12 @@ class Driver:
             self.progress.message = "Manual action stopped"
             return DriverCommandResult(ok=True, message="manual action stopped")
         except VendorBridgeError as exc:
+            logging.exception("Manual stop failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Manual stop failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Manual stop failed")
             self.progress.state = PlotState.IDLE
             self.progress.message = f"Manual stop failed: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
@@ -403,9 +398,11 @@ class Driver:
         try:
             self.bridge.disconnect()
         except VendorBridgeError as exc:
+            logging.exception("Bridge release before plot runtime failed")
             self.progress.message = f"Bridge release failed before plot runtime: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Bridge release before plot runtime failed")
             self.progress.message = f"Bridge release failed before plot runtime: {exc}"
             return DriverCommandResult(ok=False, message=str(exc))
 
@@ -428,14 +425,17 @@ class Driver:
             self.bridge.connect()
             response = action()
         except VendorBridgeError as exc:
+            logging.exception("Bridge action failed")
             action_error = exc
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Bridge action failed")
             action_error = exc
 
         disconnect_error: Exception | None = None
         try:
             self.bridge.disconnect()
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Bridge auto-disconnect failed")
             disconnect_error = exc
 
         if action_error is not None:
@@ -452,9 +452,7 @@ class Driver:
 
         if disconnect_error is not None:
             self.progress.state = PlotState.IDLE
-            self.progress.message = (
-                f"{success_message}, but auto-disconnect failed: {disconnect_error}"
-            )
+            self.progress.message = f"{success_message}, but auto-disconnect failed: {disconnect_error}"
             return DriverCommandResult(ok=False, message=str(disconnect_error))
 
         self.progress.state = PlotState.IDLE

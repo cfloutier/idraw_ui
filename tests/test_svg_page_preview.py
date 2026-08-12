@@ -5,7 +5,10 @@ import tempfile
 import unittest
 
 from idraw_ui.ui.svg_page_preview import (
+    BBoxMm,
+    SvgPageSize,
     calculate_page_placement,
+    drawing_exceeds_page,
     read_svg_drawing_bbox,
     read_svg_page_size,
 )
@@ -20,31 +23,23 @@ class SvgPageSizeTests(unittest.TestCase):
 
     def test_reads_physical_mm_dimensions(self) -> None:
         size = self._read(
-            '<svg xmlns="http://www.w3.org/2000/svg" '
-            'width="105mm" height="148mm" viewBox="0 0 396.85 559.37" />'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="105mm" height="148mm" viewBox="0 0 396.85 559.37" />'
         )
 
         self.assertEqual((size.width, size.height, size.label), (105.0, 148.0, "mm"))
 
     def test_converts_inches_to_mm(self) -> None:
-        size = self._read(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="2in" height="1in" />'
-        )
+        size = self._read('<svg xmlns="http://www.w3.org/2000/svg" width="2in" height="1in" />')
 
         self.assertEqual((size.width, size.height, size.label), (50.8, 25.4, "mm"))
 
     def test_uses_view_box_ratio_for_missing_physical_dimension(self) -> None:
-        size = self._read(
-            '<svg xmlns="http://www.w3.org/2000/svg" '
-            'width="100mm" viewBox="0 0 200 100" />'
-        )
+        size = self._read('<svg xmlns="http://www.w3.org/2000/svg" width="100mm" viewBox="0 0 200 100" />')
 
         self.assertEqual((size.width, size.height, size.label), (100.0, 50.0, "mm"))
 
     def test_falls_back_to_view_box_units(self) -> None:
-        size = self._read(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" />'
-        )
+        size = self._read('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 200" />')
 
         self.assertEqual(
             (size.width, size.height, size.label),
@@ -177,17 +172,37 @@ class SvgDrawingBBoxTests(unittest.TestCase):
 
     def test_returns_none_without_physical_scale(self) -> None:
         bbox = self._read_bbox(
-            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
-            '<path d="M 0,0 L 10,10" /></svg>'
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M 0,0 L 10,10" /></svg>'
         )
         self.assertIsNone(bbox)
 
     def test_returns_none_when_no_drawable_content(self) -> None:
         bbox = self._read_bbox(
-            '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" '
-            'viewBox="0 0 100 100"></svg>'
+            '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100"></svg>'
         )
         self.assertIsNone(bbox)
+
+
+class DrawingExceedsPageTests(unittest.TestCase):
+    def test_false_when_bbox_within_page(self) -> None:
+        page = SvgPageSize(100.0, 100.0, "mm")
+        bbox = BBoxMm(10.0, 10.0, 90.0, 90.0)
+        self.assertFalse(drawing_exceeds_page(page, bbox))
+
+    def test_true_when_bbox_extends_past_right_edge(self) -> None:
+        page = SvgPageSize(100.0, 100.0, "mm")
+        bbox = BBoxMm(10.0, 10.0, 110.0, 90.0)
+        self.assertTrue(drawing_exceeds_page(page, bbox))
+
+    def test_true_when_bbox_extends_before_origin(self) -> None:
+        page = SvgPageSize(100.0, 100.0, "mm")
+        bbox = BBoxMm(-5.0, 10.0, 90.0, 90.0)
+        self.assertTrue(drawing_exceeds_page(page, bbox))
+
+    def test_false_when_bbox_exactly_matches_page(self) -> None:
+        page = SvgPageSize(100.0, 100.0, "mm")
+        bbox = BBoxMm(0.0, 0.0, 100.0, 100.0)
+        self.assertFalse(drawing_exceeds_page(page, bbox))
 
 
 if __name__ == "__main__":

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import math
 import re
 import tkinter as tk
@@ -10,9 +11,7 @@ from xml.etree import ElementTree as ET
 
 import customtkinter as ctk
 
-_LENGTH_PATTERN = re.compile(
-    r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([a-zA-Z]*)\s*$"
-)
+_LENGTH_PATTERN = re.compile(r"^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)\s*([a-zA-Z]*)\s*$")
 _NUMBER_PATTERN = re.compile(r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?")
 _MM_PER_UNIT = {
     "": 25.4 / 96.0,
@@ -407,9 +406,7 @@ def _rect_points(elem: ET.Element) -> list[tuple[float, float]]:
     return [(x, y), (x + w, y), (x, y + h), (x + w, y + h)]
 
 
-def _ellipse_sample(
-    cx: float, cy: float, rx: float, ry: float, steps: int = 32
-) -> list[tuple[float, float]]:
+def _ellipse_sample(cx: float, cy: float, rx: float, ry: float, steps: int = 32) -> list[tuple[float, float]]:
     return [
         (
             cx + rx * math.cos(2 * math.pi * i / steps),
@@ -466,9 +463,7 @@ def _is_hidden(elem: ET.Element) -> bool:
         if sep:
             declarations[key.strip().lower()] = value.strip().lower()
     display = declarations.get("display", (elem.get("display") or "").strip().lower())
-    visibility = declarations.get(
-        "visibility", (elem.get("visibility") or "").strip().lower()
-    )
+    visibility = declarations.get("visibility", (elem.get("visibility") or "").strip().lower())
     return display == "none" or visibility == "hidden"
 
 
@@ -524,6 +519,7 @@ def read_svg_drawing_bbox(path: str | Path) -> BBoxMm | None:
     try:
         root = ET.parse(str(path)).getroot()
     except (ET.ParseError, OSError):
+        logging.exception(f"Failed to compute drawing bbox for {path}")
         return None
 
     view_box = _parse_view_box(root.get("viewBox"))
@@ -532,15 +528,9 @@ def read_svg_drawing_bbox(path: str | Path) -> BBoxMm | None:
 
     if view_box is not None:
         origin_x, origin_y, vb_width, vb_height = view_box
-        scale_x = (
-            width_len[0] * _MM_PER_UNIT[width_len[1]] / vb_width
-            if width_len is not None and vb_width
-            else None
-        )
+        scale_x = width_len[0] * _MM_PER_UNIT[width_len[1]] / vb_width if width_len is not None and vb_width else None
         scale_y = (
-            height_len[0] * _MM_PER_UNIT[height_len[1]] / vb_height
-            if height_len is not None and vb_height
-            else None
+            height_len[0] * _MM_PER_UNIT[height_len[1]] / vb_height if height_len is not None and vb_height else None
         )
         if scale_x is None and scale_y is None:
             return None
@@ -554,6 +544,17 @@ def read_svg_drawing_bbox(path: str | Path) -> BBoxMm | None:
 
     assert scale_x is not None and scale_y is not None
     return _collect_points_mm(root, scale_x, scale_y, origin_x, origin_y)
+
+
+def drawing_exceeds_page(page: SvgPageSize, bbox: BBoxMm) -> bool:
+    """Whether the drawing bounding box extends outside the SVG page rectangle."""
+    tolerance = 1e-6
+    return (
+        bbox.min_x < -tolerance
+        or bbox.min_y < -tolerance
+        or bbox.max_x > page.width + tolerance
+        or bbox.max_y > page.height + tolerance
+    )
 
 
 def _format_size_value(value: float) -> str:
@@ -606,6 +607,7 @@ class SvgPagePreview:
         try:
             self._page_size = read_svg_page_size(self._path)
         except (ET.ParseError, OSError, ValueError):
+            logging.exception(f"Failed to read SVG page size for {self._path}")
             self._page_size = None
         self._drawing_bbox = read_svg_drawing_bbox(self._path)
         self._redraw()
@@ -613,6 +615,13 @@ class SvgPagePreview:
 
     def get_drawing_bbox(self) -> BBoxMm | None:
         return self._drawing_bbox
+
+    def bbox_exceeds_page(self) -> bool | None:
+        page = self._page_size
+        bbox = self._drawing_bbox
+        if page is None or bbox is None or page.label != "mm":
+            return None
+        return drawing_exceeds_page(page, bbox)
 
     def set_table(
         self,
@@ -850,14 +859,10 @@ class SvgPagePreview:
         #     font=("Segoe UI", 10, "bold"),
         # )
 
-        size_text = (
-            f"{_format_size_value(page.width)} × "
-            f"{_format_size_value(page.height)} {page.label}"
-        )
+        size_text = f"{_format_size_value(page.width)} × {_format_size_value(page.height)} {page.label}"
         if drawing_bbox is not None:
             size_text += (
-                f"  ·  drawing {_format_size_value(drawing_bbox.width)} × "
-                f"{_format_size_value(drawing_bbox.height)} mm"
+                f"  ·  drawing {_format_size_value(drawing_bbox.width)} × {_format_size_value(drawing_bbox.height)} mm"
             )
         home_points = {
             "top-left": (safe_left, safe_top),
@@ -885,11 +890,7 @@ class SvgPagePreview:
         canvas.create_text(
             width / 2,
             height - 24,
-            text=(
-                size_text
-                if physical_size_known
-                else f"{size_text} · physical scale unavailable"
-            ),
+            text=(size_text if physical_size_known else f"{size_text} · physical scale unavailable"),
             fill="#29465B" if page_fits else "#B42318",
             font=("Segoe UI", 11, "bold"),
         )
