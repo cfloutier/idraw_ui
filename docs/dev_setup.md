@@ -16,7 +16,8 @@ python -m pip install -r requirements.txt
 git clone https://github.com/cfloutier/idraw2_internal.git ../idraw2_internal
 
 # 3 — install the vendor runtime as editable (development only)
-pip install --no-deps -e ../idraw2_internal
+# (its own dependencies, e.g. requests/tqdm/ink_extensions, are pulled in too)
+pip install -e ../idraw2_internal
 
 # 4 — install the pre-commit hooks
 python -m pre_commit install

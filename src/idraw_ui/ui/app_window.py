@@ -27,7 +27,7 @@ from idraw_ui.ui.log_tab import LogTab
 from idraw_ui.ui.machine_tab import MachineTab
 from idraw_ui.ui.marks_tab import MarksTab
 from idraw_ui.ui.progress_bar import ProgressBar
-from idraw_ui.ui.svg_page_preview import SvgPagePreview
+from idraw_ui.ui.svg_page_preview import BBoxMm, SvgPagePreview
 from idraw_ui.ui.tools import (
     _mm_min_to_inch_s,
     format_duration,
@@ -151,6 +151,7 @@ class AppWindow:
 
         self._last_loaded_svg: Path | None = None
         self._last_reloadable_svg: Path | None = None
+        self._last_drawing_bbox: BBoxMm | None = None
         self._is_loading_svg = False
         self._svg_load_worker: threading.Thread | None = None
         self._loading_stage: str | None = None
@@ -417,6 +418,12 @@ class AppWindow:
     def _compose_status_text(self, *, state_text: str, metrics_text: str) -> str:
         return f"{self._status_message}\nState: {state_text} | {metrics_text}"
 
+    def _bbox_text(self) -> str:
+        bbox = self._last_drawing_bbox
+        if bbox is None:
+            return "-"
+        return f"{bbox.width:.1f} × {bbox.height:.1f} mm"
+
     def _detect_layer_speed_overrides(self, svg_path: str | Path) -> list[int]:
         try:
             root = ET.parse(str(svg_path)).getroot()
@@ -485,7 +492,10 @@ class AppWindow:
         estimated = format_duration(progress.estimated_seconds)
         elapsed = format_duration(progress.elapsed_seconds)
         dist = f"down {progress.distance_pen_down_mm:.1f} mm | total {progress.distance_total_mm:.1f} mm"
-        metrics_text = f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | Lifts: {progress.pen_lifts}"
+        metrics_text = (
+            f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | "
+            f"BBox: {self._bbox_text()} | Lifts: {progress.pen_lifts}"
+        )
         self.metrics_var.set(metrics_text)
         self.status_var.set(
             self._compose_status_text(state_text=state_text, metrics_text=metrics_text)
@@ -510,75 +520,99 @@ class AppWindow:
 
         if self.load_button is not None:
             self.load_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.reload_button is not None:
             self.reload_button.configure(
-                state="normal"
-                if (has_svg and not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (has_svg and not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.home_button is not None:
             self.home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.machine_physical_home_button is not None:
             self.machine_physical_home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.machine_my_home_button is not None:
             self.machine_my_home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.trace_home_button is not None:
             self.trace_home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.center_button is not None:
             self.center_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.trace_center_button is not None:
             self.trace_center_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.jog_pos_x_button is not None:
             self.jog_pos_x_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.jog_pos_y_button is not None:
             self.jog_pos_y_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.jog_neg_x_button is not None:
             self.jog_neg_x_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.jog_neg_y_button is not None:
             self.jog_neg_y_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (not is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.play_button is not None:
             self.play_button.configure(
@@ -587,15 +621,19 @@ class AppWindow:
             )
         if self.pause_button is not None:
             self.pause_button.configure(
-                state="normal"
-                if (is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=(
+                    "normal"
+                    if (is_drawing and not is_loading and not is_manual)
+                    else "disabled"
+                )
             )
         if self.stop_button is not None:
             self.stop_button.configure(
-                state="normal"
-                if ((is_drawing or is_paused or is_manual) and not is_loading)
-                else "disabled"
+                state=(
+                    "normal"
+                    if ((is_drawing or is_paused or is_manual) and not is_loading)
+                    else "disabled"
+                )
             )
         self._update_jog_position_display()
 
@@ -902,6 +940,7 @@ class AppWindow:
             return
 
         self._last_loaded_svg = Path(path)
+        self._last_drawing_bbox = None
         svg_name = Path(path).name
         self._append_trace_separator(f"Load SVG: {svg_name}")
         self._is_loading_svg = True
@@ -963,6 +1002,7 @@ class AppWindow:
 
             if load_result.ok and self.svg_page_preview is not None:
                 self.svg_page_preview.set_svg(path)
+                self._last_drawing_bbox = self.svg_page_preview.get_drawing_bbox()
 
             self._update_from_result(load_result, action="Load")
             self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")
@@ -981,6 +1021,8 @@ class AppWindow:
                     f"{estimate_elapsed:.1f}s" if estimate_elapsed is not None else "?"
                 )
                 summary = f"Estimated: {estimate_txt}  (computed in {elapsed_str})"
+                if self._last_drawing_bbox is not None:
+                    summary += f"  |  BBox: {self._bbox_text()}"
                 self._set_status_message(f"OK: {summary}")
                 self._set_status_style(ok=True)
                 self._append_trace_log(summary)

@@ -47,6 +47,12 @@ on the current machine, orientation, home corner, and drawing margins. If the
 SVG does not fit inside the configured drawing area, **OUT OF BOUNDS** appears
 beside the Play button and the preview outline turns red.
 
+After Load/Reload, the preview also outlines the actual size of the drawing
+inside the page (dashed magenta rectangle) and shows its dimensions next to
+the page size at the bottom (`drawing W × H mm`). This is computed directly
+from the SVG geometry — the drawing is not rendered — so it stays fast even
+for complex files.
+
 ---
 
 ### Jog

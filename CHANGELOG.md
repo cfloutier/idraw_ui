@@ -5,6 +5,20 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.2] — 2026-08-12
+
+### Added
+- **Drawing bounding box** in the SVG page preview — after Load/Reload, the actual size of the drawing inside the page is computed (from path/rect/circle/ellipse/line/polyline/polygon geometry and nested transforms, without rendering the SVG) and shown as an outline on the preview plus a `drawing W × H mm` label
+
+### Fixed
+- Drawing bounding box could include content from hidden Inkscape layers (`display:none` / `visibility:hidden`), overstating the drawing size
+- `docs/dev_setup.md` installed `idraw2_internal` with `pip install --no-deps`, so its own dependencies (`requests`, `tqdm`, `ink_extensions`) were never installed on a fresh machine — caused `Prepare failed: No module named 'requests'` and a silent "Estimated: -" with all metrics at zero. `--no-deps` removed so the editable install pulls them in automatically
+
+### Changed
+- Bounding box outline now drawn with a white halo behind a dashed magenta line so it stays legible even when it coincides with the page border (e.g. artwork that traces its own page frame)
+- Preview "Up" direction arrow disabled (commented out, not removed) — it was only useful for debugging table/home orientation
+- Developer documentation reorganized: `docs/developer_notes.md` replaced by `docs/dev_setup.md` (install/build only); architecture and machine-model-addition notes moved to `docs/architecture_decisions.md`; project status/next-plans consolidated in `docs/AI_HANDOFF_PLAN.md`
+
 ## [0.9.1] — 2026-08-09
 
 ### Fixes

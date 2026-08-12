@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "idraw-ui"
-version = "0.9.1"
+version = "0.9.2"
 description = "Clean-slate UI for iDraw-based plotting"
 requires-python = ">=3.10"
 dependencies = []
