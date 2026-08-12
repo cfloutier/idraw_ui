@@ -155,10 +155,38 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
   never mirrored that discount — invisible normally, but compounds into a large
   overestimate on drawings with many long pen-up hops (down to ~74% estimated
   vs. actual on the worst calibration case). Fixed in `idraw2_internal`.
-- **Still needed**: re-run the `svg_calibration/` set (especially `03`, `05`,
-  `06`, which showed the biggest gaps) after this fix, plus the pen-height
-  sweep on `06`/`07`, to see how much of the remaining gap (if any) is left and
-  whether `PenLiftTiming`'s constants themselves still need tuning.
+- Re-ran `03`/`05`/`06` after the `-30ms` fix: `05` went from 97.0% to 103.2%
+  (essentially fixed, crossed over to a small underestimate). `06` improved
+  only modestly (73-88% before → 77.8% after, at matched pen height). `03`
+  barely moved (73.9% → 72.2%) — its hops are short enough that few of its
+  motion sub-commands exceed the 50 ms gate the fix hooks into.
+- Instrumented the real (non-preview) execution path directly (temporary
+  timing logs in `dripfeed.feed_sm()` and `pen_handling.py`'s
+  `pen_raise()`/`pen_lower()`, removed after use — not in the diff) and
+  captured real hardware data for `03` + `06` (6018 motion sub-commands, 302
+  pen lifts). Findings, precisely quantified:
+  - Real per-motion-sub-command time is close to a **constant ~20 ms**
+    (dominated by serial/USB round-trip latency), largely independent of the
+    theoretical `move_time` for short segments — so the *ratio* of
+    real-to-theoretical degrades as `move_time` grows past that floor (82.6%
+    for 0-30 ms segments, 64.6% for 30-50 ms, 55.3% for 50-100 ms in the
+    captured data).
+  - Real `pen_raise`/`pen_lower` commands (43-47 ms) are also consistently
+    faster than the `PenLiftTiming` estimate (57 ms) at the tested pen
+    height.
+  - Comparing full-run totals: of the 56.15 s combined `03`+`06` gap,
+    **40.41 s (72%) is explained** by the above (summing real vs. theoretical
+    across every single instrumented event). The remaining **15.74 s (28%)**
+    wasn't captured by per-event instrumentation — likely one-time
+    session-level overhead (homing, `servo_init()`, return-to-park at the
+    end) rather than anything that scales with lift/segment count.
+- **Still needed**: this points to `move_time` itself (in
+  `idraw2_0internal/motion.py::compute_segment()`) needing a communication-
+  latency floor added to short segments, not just a fixed threshold-gated
+  discount — a bigger change than this session's two fixes. Also worth
+  measuring the ~15.74 s session-level overhead directly (not yet
+  instrumented) before touching `compute_segment()`. Re-run `07`/`08` too
+  once changed, to confirm they don't regress (they were already accurate).
 
 3. Play/Pause reliability fixes
 

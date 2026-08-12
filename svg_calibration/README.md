@@ -86,8 +86,37 @@ uncounted discount, lost in the noise of a short test); 151 repeated ~124 mm
 hops produce ~1500 (tens of seconds of discount, exactly matching the
 observed gap). Short ~4.7 mm hops (`07`) mostly stay under the 50 ms gate
 entirely, so they were never affected — consistent with `07`'s 100.0% result.
-Fixed in `dripfeed.py` to apply the same discount in preview. Re-run `03`,
-`05`, `06` (the tests that showed the largest gaps) to confirm.
+Fixed in `dripfeed.py` to apply the same discount in preview.
+
+**Confirmed, partially**: re-running `03`/`05`/`06` after the fix, `05` is
+now essentially accurate (97.0% → 103.2%). `06` improved but is still off
+(73-88% → 77.8% at matched pen height). `03` barely moved (73.9% → 72.2%).
+
+**Deeper dig — instrumenting the real execution path directly**: added
+temporary timing logs inside `dripfeed.feed_sm()` (real branch) and
+`pen_handling.py`'s `pen_raise()`/`pen_lower()` to measure actual wall-clock
+time per motion sub-command and per pen-lift command during real plots of
+`03` and `06` (removed again after use — not present in the current diff).
+Findings:
+- Real per-motion-sub-command time sits close to a **constant ~20 ms**
+  (serial/USB round-trip latency), largely independent of the theoretical
+  `move_time` — so short segments are estimated reasonably (82.6% ratio for
+  0-30 ms segments) but the ratio degrades as `move_time` grows past that
+  floor (64.6% for 30-50 ms, 55.3% for 50-100 ms).
+- Real `pen_raise`/`pen_lower` (43-47 ms) are also faster than `PenLiftTiming`
+  predicts (57 ms) at the pen height tested.
+- Summing every single instrumented event: of the 56.15 s combined `03`+`06`
+  gap, **40.41 s (72%) is explained** by the above. The remaining **15.74 s
+  (28%)** wasn't captured — likely one-time session-level overhead (homing,
+  `servo_init()`, return-to-park) rather than anything scaling with lift or
+  segment count; not yet measured directly.
+
+**Where this leaves it**: the `-30 ms` gate was a reasonable first fix but
+the real shape of the problem is that `compute_segment()`'s `move_time`
+doesn't account for a communication-latency floor on short segments — a
+bigger change than a threshold-gated discount. That, plus measuring the
+~15.74 s session-level overhead, is the next concrete step. Full detail in
+`docs/AI_HANDOFF_PLAN.md` ("Time-estimation refinement").
 
 **Known vendor issue, worked around here**: an earlier version of this file
 clustered all 300 marks within a 0.3 mm span (truly ~zero pen-up travel).
