@@ -16,6 +16,10 @@ The following points are now implemented and validated on real tests:
 - Profile changes are saved immediately as the user edits them.
 - Creating a new profile from the UI is now supported.
 - Machine advanced setting `digest` is persisted in `settings/machine.yaml`.
+- Bounds are enforced. A simple warning with the red line in the ui
+- Landscape and portrait mapping is validated for the idraw H A1.
+- Position-mark drawing tool is implemented (`Marks` tab) to draw paper/page
+  placement marks on the table.
 
 Additional behavior now in place:
 
@@ -124,40 +128,22 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 ## Next plans (from current project direction)
 
-1. Tracing orientation adaptation
 
-- During trace execution, adapt orientation so the drawing is placed correctly
-  for the selected table/machine conventions.
-- The four portrait logical-home choices are physically validated on A1/A6;
-  preserve this matrix as a regression baseline.
-- Enforce bounds so the transformed SVG cannot leave the usable plotter area.
-- Validate portrait first, then design and validate the landscape mapping
-  separately; do not infer it solely from the portrait result.
 
 2. Post-load SVG preview mode
 
 - After loading an SVG, show a preview of the SVG footprint/gabarit as read from
   the file against the table and current Machine tab choices.
 
-3. SVG transformation pipeline
 
-- Orient the SVG correctly from those machine choices, potentially by
-  transforming/manipulating the SVG on the fly.
 
-4. README split pass (before new tool proposal)
 
-- Before proposing the position-mark tool, do a full README pass to separate
-  developer-facing notes from user-facing documentation.
 
-5. Position-mark drawing tool
-
-- Add a tool to draw paper/page placement marks on the table.
-
-6. Time-estimation refinement
+5. Time-estimation refinement
 
 - Improve and calibrate time-estimation calculations.
 
-7. Play/Pause reliability fixes
+6. Play/Pause reliability fixes
 
 - Investigate and fix remaining Play/Pause edge cases.
 - Specific priority: dot-heavy jobs where points are currently lost.

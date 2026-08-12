@@ -170,14 +170,16 @@ directions from centre.
   status until machine physically settles.
 - `Draw Profile` tab merges Speed and Pen Height controls.
 - `auto_rotate` and `preview` removed from profiles (handled internally).
+- Bounds are enforced so the transformed SVG cannot leave the usable plotter
+  area (implemented and tested).
+- Landscape and portrait mapping is validated for the idraw H A1 (implemented and tested).
+- Positioning-mark tool implemented to draw page placement marks on the table
+  (`Marks` tab; implemented and tested).
 
 ## Next milestones
 
-1. Enforce bounds so transformed SVG cannot leave the usable plotter area.
-2. Validate landscape mapping for all machines beyond A1.
-3. Positioning-mark tool to draw page placement marks on the table.
-4. Refine time-estimation calculations.
-5. Investigate Play/Pause edge cases in dot-heavy drawings.
+1. Refine time-estimation calculations.
+2. Investigate Play/Pause edge cases in dot-heavy drawings.
 
 ## Development tooling
 
