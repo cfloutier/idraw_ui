@@ -12,8 +12,11 @@ python -m venv .venv
 # 2 — install dependencies (includes PyInstaller and pre-commit hooks)
 python -m pip install -r requirements.txt
 
+# git clone idraw2_internal
+git clone https://github.com/cfloutier/idraw2_internal.git ../idraw2_internal
+
 # 3 — install the vendor runtime as editable (development only)
-pip install --no-deps -e C:\dev\__tracer\idraw2_internal
+pip install --no-deps -e ../idraw2_internal
 
 # 4 — install the pre-commit hooks
 python -m pre_commit install
