@@ -14,6 +14,11 @@ from xml.etree import ElementTree as ET
 import customtkinter as ctk
 
 from idraw_ui.backend.driver import Driver, DriverCommandResult
+from idraw_ui.backend.estimation_log import (
+    CalibrationRow,
+    append_calibration_row,
+    default_calibration_log_path,
+)
 from idraw_ui.backend.machine_models import (
     MACHINE_HOME_CORNERS,
     display_axis_vectors,
@@ -21,7 +26,7 @@ from idraw_ui.backend.machine_models import (
     list_machine_models,
     table_relative_jog_vector,
 )
-from idraw_ui.backend.models import PlotProfile, PlotState
+from idraw_ui.backend.models import PlotProfile, PlotProgress, PlotState
 from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.ui.draw_profile_tab import DrawProfileTab
 from idraw_ui.ui.jog_tab import JogTab
@@ -141,6 +146,8 @@ class AppWindow:
         self._manual_action_stop_requested = False
         self._manual_action_stop_result: DriverCommandResult | None = None
         self._manual_action_worker: threading.Thread | None = None
+        self._last_seen_plot_state: PlotState | None = None
+        self._calibration_log_path = default_calibration_log_path()
 
         self.driver.add_profile_change_listener(self._on_driver_profile_changed)
         self._build_layout()
@@ -419,6 +426,50 @@ class AppWindow:
                     speeds.add(speed)
         return sorted(speeds)
 
+    def _maybe_log_plot_completion(self, progress: PlotProgress) -> None:
+        """Detect a real plot's DRAWING -> READY transition and record the
+        estimated-vs-actual duration, for time-estimation calibration."""
+        previous_state = self._last_seen_plot_state
+        self._last_seen_plot_state = progress.state
+        if previous_state != PlotState.DRAWING or progress.state != PlotState.READY:
+            return
+        actual = progress.last_run_duration_seconds
+        if actual is None:
+            return
+
+        estimated = progress.estimated_seconds
+        if estimated and estimated > 0:
+            ratio_text = f" ({actual / estimated * 100:.0f}%)"
+        else:
+            ratio_text = ""
+        self._append_trace_log(
+            f"Plot finished: estimated {format_duration(estimated)}, actual {format_duration(actual)}{ratio_text}"
+        )
+
+        svg_name = self._last_loaded_svg.name if self._last_loaded_svg is not None else "unknown.svg"
+        machine_settings = self.driver.machine_settings
+        plot_profile = self.driver.plot_profile
+        row = CalibrationRow(
+            svg_name=svg_name,
+            estimated_seconds=estimated,
+            actual_seconds=actual,
+            pen_lifts=progress.pen_lifts,
+            distance_pen_down_mm=progress.distance_pen_down_mm,
+            distance_total_mm=progress.distance_total_mm,
+            speed_penup=plot_profile.speed_penup,
+            speed_pendown=plot_profile.speed_pendown,
+            accel=plot_profile.accel,
+            pen_up_height=plot_profile.pen_up_height,
+            pen_down_height=plot_profile.pen_down_height,
+            machine_model=machine_settings.machine_model,
+            table_orientation=machine_settings.table_orientation,
+            digest=machine_settings.digest,
+        )
+        try:
+            append_calibration_row(self._calibration_log_path, row)
+        except OSError:
+            logging.exception("Failed to write time-estimation calibration log row")
+
     def _update_from_result(
         self,
         result: DriverCommandResult,
@@ -439,6 +490,7 @@ class AppWindow:
 
     def _refresh_view(self) -> None:
         progress = self.driver.get_progress()
+        self._maybe_log_plot_completion(progress)
         if self._is_loading_svg:
             stage = self._loading_stage or "loading"
             elapsed = 0.0
@@ -932,14 +984,19 @@ class AppWindow:
                 speed_pendown_mm_min = float(self.driver.plot_profile.speed_pendown)
                 speed_penup_in_s = _mm_min_to_inch_s(speed_penup_mm_min)
                 speed_pendown_in_s = _mm_min_to_inch_s(speed_pendown_mm_min)
+                estimate_progress = self.driver.get_progress()
                 self._append_trace_log(
                     "Estimate inputs: "
                     f"speed_penup={speed_penup_mm_min:.0f} mm/min "
                     f"({speed_penup_in_s:.4f} in/s preview), "
                     f"speed_pendown={speed_pendown_mm_min:.0f} mm/min "
                     f"({speed_pendown_in_s:.4f} in/s preview), "
-                    f"accel={self.driver.plot_profile.accel:.1f} -> "
-                    f"estimated={estimate_txt}"
+                    f"accel={self.driver.plot_profile.accel:.1f}, "
+                    f"digest={self.driver.machine_settings.digest} -> "
+                    f"estimated={estimate_txt}, "
+                    f"pen_lifts={estimate_progress.pen_lifts}, "
+                    f"distance_pen_down={estimate_progress.distance_pen_down_mm:.1f} mm, "
+                    f"distance_total={estimate_progress.distance_total_mm:.1f} mm"
                 )
 
             self._refresh_view()

@@ -5,6 +5,31 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] — 2026-08-12
+
+### Added
+- **Time-estimation calibration tooling** — first step of the "Estimated: -" precision
+  work: root-caused why plot estimates are always far below actual plot time.
+  - `idraw2_internal` (vendor): `PenLiftTiming.update()` (`pen_handling.py`) was
+    entirely commented out, so every pen lift/lower contributed `0 ms` to the
+    estimate regardless of `pen_lifts` count — a major, drawing-dependent source
+    of under-estimation. Re-implemented from the upstream AxiDraw driver this
+    code was forked from, with the six missing servo timing constants restored
+    in `idraw2_0_conf.py`. These are AxiDraw's RC-servo defaults as a starting
+    point only — this machine's pen lift is a stepper motor, so real values will
+    need hardware calibration.
+  - The actual duration of a finished real plot was never captured — it reset to
+    `0.0` the instant the plot thread ended. `Idraw2InternalRuntime` now keeps
+    `last_run_duration_seconds` until the next plot starts.
+  - New `logs/time_estimation_calibration.csv` (gitignored): every real (non-preview)
+    plot that finishes normally appends estimated vs. actual seconds plus
+    drawing/profile metadata (`pen_lifts`, distances, speeds, accel, pen heights,
+    machine model/orientation, digest mode), for calibrating the model against
+    real measurements over multiple test drawings.
+  - Trace log now shows `Plot finished: estimated Xs, actual Ys (Z%)` right when a
+    real plot completes, and the "Estimate inputs" diagnostic log now also
+    includes `pen_lifts`, both distances, and `digest`.
+
 ## [0.9.2] — 2026-08-12
 
 ### Added

@@ -118,6 +118,7 @@ class Idraw2InternalRuntime:
         self._message = "Idle"
         self._state = PlotState.IDLE
         self._started_at: float | None = None
+        self._last_run_duration_seconds: float | None = None
 
     def configure(
         self,
@@ -157,6 +158,7 @@ class Idraw2InternalRuntime:
         self._pause_event.clear()
         self._last_error = None
         self._started_at = time.time()
+        self._last_run_duration_seconds = None
         self._state = PlotState.DRAWING
         self._message = "Drawing"
         self._start_worker(mode="plot", source_svg=self.svg_path)
@@ -180,6 +182,7 @@ class Idraw2InternalRuntime:
         self._pause_event.clear()
         self._last_error = None
         self._started_at = time.time()
+        self._last_run_duration_seconds = None
         self._state = PlotState.DRAWING
         self._message = "Resumed"
         self._start_worker(mode="resume", source_svg=self._resume_svg_path, resume_type="plot")
@@ -226,6 +229,7 @@ class Idraw2InternalRuntime:
         status = {
             "state": self._state,
             "elapsed_seconds": elapsed_seconds,
+            "last_run_duration_seconds": self._last_run_duration_seconds,
             "message": message,
         }
         status.update(self._last_metrics)
@@ -270,6 +274,10 @@ class Idraw2InternalRuntime:
                     self._state = PlotState.PAUSED
                     self._message = "Paused"
                 else:
+                    # Only a full, uninterrupted completion counts as a valid
+                    # duration for calibration purposes (not a pause/error).
+                    if self._started_at is not None:
+                        self._last_run_duration_seconds = max(0.0, time.time() - self._started_at)
                     self._state = PlotState.READY
                     self._message = "Plot finished"
             except Exception as exc:  # noqa: BLE001  # pragma: no cover

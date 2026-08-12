@@ -375,6 +375,7 @@ class Driver:
         self.progress.state = source.state
         self.progress.elapsed_seconds = source.elapsed_seconds
         self.progress.estimated_seconds = source.estimated_seconds
+        self.progress.last_run_duration_seconds = source.last_run_duration_seconds
         self.progress.distance_pen_down_mm = source.distance_pen_down_mm
         self.progress.distance_total_mm = source.distance_total_mm
         self.progress.pen_lifts = source.pen_lifts

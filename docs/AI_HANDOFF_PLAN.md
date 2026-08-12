@@ -139,7 +139,19 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 2. Time-estimation refinement
 
-- Improve and calibrate time-estimation calculations.
+- Root-caused (v0.10.0): `idraw2_internal`'s `PenLiftTiming.update()` was fully
+  commented out, so pen lift/lower time was always 0 in the estimate regardless
+  of `pen_lifts` — a major, drawing-dependent source of under-estimation.
+  Re-implemented from the upstream AxiDraw driver; the restored constants are
+  AxiDraw's RC-servo defaults, not calibrated for this machine's stepper-driven
+  pen lift.
+- Calibration tooling built (v0.10.0): every real plot now appends estimated vs.
+  actual duration + drawing/profile metadata to
+  `logs/time_estimation_calibration.csv` (gitignored), and the trace log shows
+  `Plot finished: estimated Xs, actual Ys` immediately.
+- **Still needed**: run a batch of real test plots (the `test_svg_files/` set is
+  a reasonable spread of "few strokes" to "many strokes") to collect real
+  calibration data, then derive/tune the actual timing constants from it.
 
 3. Play/Pause reliability fixes
 

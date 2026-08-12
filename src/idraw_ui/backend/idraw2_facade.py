@@ -133,6 +133,12 @@ class Idraw2Facade:
         if elapsed_seconds is not None:
             self.progress.elapsed_seconds = float(elapsed_seconds)
 
+        if "last_run_duration_seconds" in status:
+            last_run_duration_seconds = status["last_run_duration_seconds"]
+            self.progress.last_run_duration_seconds = (
+                float(last_run_duration_seconds) if last_run_duration_seconds is not None else None
+            )
+
         distance_pen_down_mm = status.get("distance_pen_down_mm")
         if distance_pen_down_mm is not None:
             self.progress.distance_pen_down_mm = float(distance_pen_down_mm)
