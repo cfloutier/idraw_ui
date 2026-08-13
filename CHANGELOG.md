@@ -47,6 +47,18 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
   *repeated long* hops reached as low as 74% (properties of 03/06 not shared by
   07/08) — pinpointing the per-segment, length-gated discount as the missing
   piece. Preview now applies the same discount.
+- `idraw2_internal` (vendor): Resume after Pause could silently drop points on
+  dot-heavy (stippling) drawings. `DocDigest.crop()`, which discards the
+  already-plotted portion of a paused digest, decided which whole paths to
+  skip using cumulative pen-down distance — for a long run of near-zero-length
+  paths (isolated dots), that distance barely advances whether a dot was
+  drawn or not, so genuinely un-plotted dots could be misclassified as
+  "already plotted" and dropped. Added an exact parallel counter
+  (`PlotStats.paths_completed`, persisted as `pause_path_index` in the PLOB)
+  that `crop()` now uses instead, for an unambiguous resume point regardless
+  of path length; falls back to the previous distance-only behavior for
+  resume files saved before this field existed. Not yet validated on real
+  hardware with an in-progress stippling job — see `docs/AI_HANDOFF_PLAN.md`.
 
 ## [0.9.2] — 2026-08-12
 

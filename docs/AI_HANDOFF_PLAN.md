@@ -190,8 +190,36 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
 
 3. Play/Pause reliability fixes
 
-- Investigate and fix remaining Play/Pause edge cases.
-- Specific priority: dot-heavy jobs where points are currently lost.
+- **Root-caused and fixed (v0.10.0) the dot-heavy point-loss case.** Resume
+  works by re-parsing a small saved SVG snapshot and calling
+  `DocDigest.crop(pause_dist)` (`idraw2_0internal/path_objects.py`) to
+  discard the already-plotted portion — nothing is kept in memory between
+  Pause and Resume (contrary to how instant it feels; the reload is just
+  cheap). `crop()` decided which whole paths to skip using *cumulative
+  pen-down distance* — for a run of near-zero-length paths (stippling dots),
+  that distance barely advances whether a dot was drawn or not, so a long
+  run of genuinely un-plotted dots could be silently classified as
+  "already plotted" and dropped on resume.
+  - Fix: added a parallel exact counter — `PlotStats.paths_completed`
+    (`idraw2_0internal/plot_status.py`), incremented once per fully-completed
+    `PathItem` in `plot_doc_digest()` (`idraw.py`) — captured at pause time
+    alongside `pause_dist` as `SVGPlotData.pause_path_index`, persisted in
+    the `<plotdata>` PLOB block, and used by `crop()` (now
+    `crop(distance, path_index=-1)`) as the primary whole-path skip decision
+    when available. Distance is still used to splice the one path that was
+    genuinely mid-flight at pause time (unaffected for real, non-degenerate
+    paths); a degenerate boundary path is left whole instead of spliced
+    (avoids a `crop_by_distance` division-by-zero on a zero-length segment).
+  - Backward compatible: resume files saved before this field existed read
+    back `pause_path_index = -1` and reproduce the exact previous
+    distance-only behavior — no worse than before for them.
+  - Tests: `idraw2_internal/test_path_objects.py` (`crop()` directly, incl.
+    a synthetic reproduction of the bug and its fix) and
+    `test_plot_status.py` (PLOB round-trip + backward compatibility). Not
+    yet validated on real hardware with an actual stippling job + a
+    mid-plot Pause/Resume — do that before trusting this on an unattended
+    long print.
+- Other Play/Pause edge cases beyond the dot-loss case are still open.
 
 ## Practical note for next contributors
 
