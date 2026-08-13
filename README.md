@@ -53,6 +53,18 @@ the page size at the bottom (`drawing W × H mm`). This is computed directly
 from the SVG geometry — the drawing is not rendered — so it stays fast even
 for complex files.
 
+**Known limitation — UI freezes during estimate on complex SVGs.** Load and
+Reload run the estimate on a background thread so the window shouldn't lock
+up, but with SVGs that have many separate paths (a few hundred or more —
+dense stippling/hatching files are the main case), the window can still
+appear unresponsive for the whole estimate: the internal path-joining step
+that prepares the drawing is CPU-heavy pure-Python work, and under Windows a
+background thread that saturates the CPU like this tends to starve the main
+window's event loop even though it's not actually deadlocked. The status bar
+still updates once the estimate finishes; simple files are unaffected. No
+code changes planned for this right now — noted here so it isn't mistaken
+for a crash.
+
 ---
 
 ### Jog
