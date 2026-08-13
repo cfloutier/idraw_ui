@@ -1,11 +1,11 @@
 accel: 75.0
 digest: 1
-name: bic
+name: dots
 pen_down_command: null
-pen_down_height: 5.290178571428571
+pen_down_height: 8.161434977578475
 pen_move_speed: null
 pen_up_command: null
-pen_up_height: 0.0
-reordering: 2
+pen_up_height: 3.4439461883408073
+reordering: 4
 speed_pendown: 2000.0
 speed_penup: 8000.0
