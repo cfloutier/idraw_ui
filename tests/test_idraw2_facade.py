@@ -84,6 +84,24 @@ class FakeRuntime:
         return dict(self.status)
 
 
+class FakeRuntimeNothingToDraw(FakeRuntime):
+    """Mirrors the real runtime's `_extract_metrics()` when the digest has no
+    plottable content: stats exist, but `estimated_seconds` stays None."""
+
+    def prepare(self) -> dict[str, float | None]:
+        self.calls.append("prepare")
+        metrics: dict[str, float | None] = {
+            "estimated_seconds": None,
+            "distance_pen_down_mm": 0.0,
+            "distance_total_mm": 0.0,
+            "pen_lifts": 0,
+        }
+        self.status.update(metrics)
+        self.status["state"] = PlotState.READY
+        self.status["message"] = "Prepared"
+        return metrics
+
+
 class Idraw2FacadeTests(unittest.TestCase):
     def test_runtime_is_configured_on_init(self) -> None:
         runtime = FakeRuntime()
@@ -131,6 +149,28 @@ class Idraw2FacadeTests(unittest.TestCase):
         self.assertEqual(progress.distance_pen_down_mm, 123.0)
         self.assertEqual(progress.distance_total_mm, 245.5)
         self.assertEqual(progress.pen_lifts, 7)
+
+    def test_prepare_handles_svg_with_nothing_to_draw(self) -> None:
+        """Regression test: prepare() must not crash when the runtime reports
+        no estimate because the digest has no plottable content (metrics dict
+        present but `estimated_seconds` is None)."""
+        runtime = FakeRuntimeNothingToDraw()
+        facade = Idraw2Facade(runtime=runtime)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "empty.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+
+            self.assertTrue(facade.load_svg(svg_path).ok)
+            result = facade.prepare()
+
+        self.assertTrue(result.ok)
+        progress = facade.get_progress()
+        self.assertEqual(progress.state, PlotState.READY)
+        self.assertIsNone(progress.estimated_seconds)
+        self.assertEqual(progress.distance_pen_down_mm, 0.0)
+        self.assertEqual(progress.distance_total_mm, 0.0)
+        self.assertEqual(progress.pen_lifts, 0)
 
     def test_get_progress_refreshes_live_runtime_status(self) -> None:
         runtime = FakeRuntime()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 import os
 import tempfile
 import threading
@@ -37,14 +38,10 @@ def _mirror_digest(digest: Any, *, mirror_x: bool, mirror_y: bool) -> None:
                         vertex[1] = digest.height - vertex[1]
 
 
-def _apply_logical_home_to_digest(
-    session: Any, home_corner: str, *, orientation: str = "portrait"
-) -> None:
+def _apply_logical_home_to_digest(session: Any, home_corner: str, *, orientation: str = "portrait") -> None:
     digest = session.digest
     is_landscape = orientation.strip().lower() == "landscape"
-    if digest.metadata.get(_CONTENT_ORIENTATION_METADATA_KEY) != (
-        _UPRIGHT_CONTENT_VERSION
-    ):
+    if digest.metadata.get(_CONTENT_ORIENTATION_METADATA_KEY) != (_UPRIGHT_CONTENT_VERSION):
         # portrait digest arrives 180° rotated; landscape arrives already upright
         if not is_landscape:
             _mirror_digest(digest, mirror_x=True, mirror_y=True)
@@ -121,6 +118,7 @@ class Idraw2InternalRuntime:
         self._message = "Idle"
         self._state = PlotState.IDLE
         self._started_at: float | None = None
+        self._last_run_duration_seconds: float | None = None
 
     def configure(
         self,
@@ -144,9 +142,7 @@ class Idraw2InternalRuntime:
         if self.svg_path is None:
             raise RuntimeError("No SVG loaded")
 
-        session = self._build_session(
-            mode="plot", preview=True, source_svg=self.svg_path
-        )
+        session = self._build_session(mode="plot", preview=True, source_svg=self.svg_path)
         session.effect()
         self._persist_resume_snapshot(session)
         self._last_metrics = self._extract_metrics(session)
@@ -162,6 +158,7 @@ class Idraw2InternalRuntime:
         self._pause_event.clear()
         self._last_error = None
         self._started_at = time.time()
+        self._last_run_duration_seconds = None
         self._state = PlotState.DRAWING
         self._message = "Drawing"
         self._start_worker(mode="plot", source_svg=self.svg_path)
@@ -185,11 +182,10 @@ class Idraw2InternalRuntime:
         self._pause_event.clear()
         self._last_error = None
         self._started_at = time.time()
+        self._last_run_duration_seconds = None
         self._state = PlotState.DRAWING
         self._message = "Resumed"
-        self._start_worker(
-            mode="resume", source_svg=self._resume_svg_path, resume_type="plot"
-        )
+        self._start_worker(mode="resume", source_svg=self._resume_svg_path, resume_type="plot")
 
     def stop(self) -> None:
         if self._thread_running():
@@ -233,6 +229,7 @@ class Idraw2InternalRuntime:
         status = {
             "state": self._state,
             "elapsed_seconds": elapsed_seconds,
+            "last_run_duration_seconds": self._last_run_duration_seconds,
             "message": message,
         }
         status.update(self._last_metrics)
@@ -272,16 +269,19 @@ class Idraw2InternalRuntime:
                 session.effect()
                 self._persist_resume_snapshot(session)
                 self._last_metrics = self._extract_metrics(session)
-                hw_stopped = getattr(
-                    getattr(session, "plot_status", None), "stopped", 0
-                )
+                hw_stopped = getattr(getattr(session, "plot_status", None), "stopped", 0)
                 if self._pause_event.is_set() or hw_stopped != 0:
                     self._state = PlotState.PAUSED
                     self._message = "Paused"
                 else:
+                    # Only a full, uninterrupted completion counts as a valid
+                    # duration for calibration purposes (not a pause/error).
+                    if self._started_at is not None:
+                        self._last_run_duration_seconds = max(0.0, time.time() - self._started_at)
                     self._state = PlotState.READY
                     self._message = "Plot finished"
             except Exception as exc:  # noqa: BLE001  # pragma: no cover
+                logging.exception("Plot worker failed")
                 self._last_error = exc
                 self._state = PlotState.IDLE
                 self._message = str(exc)
@@ -350,9 +350,7 @@ class Idraw2InternalRuntime:
                     continue
                 if key in {"annotations"}:
                     continue
-                if isinstance(value, (str, int, float, bool)) and not hasattr(
-                    options, key
-                ):
+                if isinstance(value, (str, int, float, bool)) and not hasattr(options, key):
                     setattr(options, key, value)
 
         options.mode = mode
@@ -360,9 +358,7 @@ class Idraw2InternalRuntime:
         digest = int(getattr(self.machine_settings, "digest", 1))
         options.digest = max(0, min(2, digest))
         if preview:
-            options.speed_pendown = self._mm_min_to_inch_s(
-                self.plot_profile.speed_pendown
-            )
+            options.speed_pendown = self._mm_min_to_inch_s(self.plot_profile.speed_pendown)
             options.speed_penup = self._mm_min_to_inch_s(self.plot_profile.speed_penup)
         else:
             options.speed_pendown = self.plot_profile.speed_pendown
@@ -371,21 +367,13 @@ class Idraw2InternalRuntime:
         options.pen_pos_up = self.plot_profile.pen_up_height
         options.pen_pos_down = self.plot_profile.pen_down_height
         # landscape: vendor auto_rotate conflicts with our correction; portrait: needed
-        is_landscape_mode = (
-            self.machine_settings.table_orientation.strip().lower() == "landscape"
-        )
+        is_landscape_mode = self.machine_settings.table_orientation.strip().lower() == "landscape"
         options.auto_rotate = not is_landscape_mode
         options.reordering = self.plot_profile.reordering
         options.report_time = False
-        options.model = get_machine_model(
-            self.machine_settings.machine_model
-        ).runtime_model
-        session._idraw_ui_logical_home_corner = (
-            self.machine_settings.my_home_corner.strip().lower()
-        )
-        session._idraw_ui_table_orientation = (
-            self.machine_settings.table_orientation.strip().lower()
-        )
+        options.model = get_machine_model(self.machine_settings.machine_model).runtime_model
+        session._idraw_ui_logical_home_corner = self.machine_settings.my_home_corner.strip().lower()
+        session._idraw_ui_table_orientation = self.machine_settings.table_orientation.strip().lower()
 
         if resume_type is not None:
             options.resume_type = resume_type
@@ -414,12 +402,8 @@ class Idraw2InternalRuntime:
         if stats is None:
             return {}
 
-        down_in = float(getattr(stats, "down_travel_tot", 0.0)) + float(
-            getattr(stats, "down_travel_inch", 0.0)
-        )
-        up_in = float(getattr(stats, "up_travel_tot", 0.0)) + float(
-            getattr(stats, "up_travel_inch", 0.0)
-        )
+        down_in = float(getattr(stats, "down_travel_tot", 0.0)) + float(getattr(stats, "down_travel_inch", 0.0))
+        up_in = float(getattr(stats, "up_travel_tot", 0.0)) + float(getattr(stats, "up_travel_inch", 0.0))
 
         pen = getattr(session, "pen", None)
         pen_status = getattr(pen, "status", None)

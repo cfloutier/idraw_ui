@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+
+import logging
 import re
 import threading
 import time
@@ -12,6 +14,11 @@ from xml.etree import ElementTree as ET
 import customtkinter as ctk
 
 from idraw_ui.backend.driver import Driver, DriverCommandResult
+from idraw_ui.backend.estimation_log import (
+    CalibrationRow,
+    append_calibration_row,
+    default_calibration_log_path,
+)
 from idraw_ui.backend.machine_models import (
     MACHINE_HOME_CORNERS,
     display_axis_vectors,
@@ -19,7 +26,7 @@ from idraw_ui.backend.machine_models import (
     list_machine_models,
     table_relative_jog_vector,
 )
-from idraw_ui.backend.models import PlotProfile, PlotState
+from idraw_ui.backend.models import PlotProfile, PlotProgress, PlotState
 from idraw_ui.backend.settings_service import SettingsService
 from idraw_ui.ui.draw_profile_tab import DrawProfileTab
 from idraw_ui.ui.jog_tab import JogTab
@@ -27,7 +34,7 @@ from idraw_ui.ui.log_tab import LogTab
 from idraw_ui.ui.machine_tab import MachineTab
 from idraw_ui.ui.marks_tab import MarksTab
 from idraw_ui.ui.progress_bar import ProgressBar
-from idraw_ui.ui.svg_page_preview import SvgPagePreview
+from idraw_ui.ui.svg_page_preview import BBoxMm, SvgPagePreview
 from idraw_ui.ui.tools import (
     _mm_min_to_inch_s,
     format_duration,
@@ -53,9 +60,7 @@ class AppWindow:
         ctk.set_default_color_theme("blue")
         self.machine_models = list_machine_models()
         self.machine_model_labels = [model.label for model in self.machine_models]
-        self._machine_models_by_label = {
-            model.label: model for model in self.machine_models
-        }
+        self._machine_models_by_label = {model.label: model for model in self.machine_models}
 
         self.root = ctk.CTk()
         self.root.title(self.title)
@@ -69,29 +74,15 @@ class AppWindow:
         self.metrics_var = tk.StringVar(value="Estimated: - | Elapsed: - | Distance: -")
         selected_machine = get_machine_model(self.driver.machine_settings.machine_model)
         self.machine_model_var = tk.StringVar(value=selected_machine.label)
-        self.table_orientation_var = tk.StringVar(
-            value=self.driver.machine_settings.table_orientation
-        )
-        self.machine_home_corner_var = tk.StringVar(
-            value=self.driver.machine_settings.my_home_corner
-        )
+        self.table_orientation_var = tk.StringVar(value=self.driver.machine_settings.table_orientation)
+        self.machine_home_corner_var = tk.StringVar(value=self.driver.machine_settings.my_home_corner)
         self.machine_margin_vars = {
-            "top": tk.StringVar(
-                value=str(self.driver.machine_settings.drawing_margin_top_mm)
-            ),
-            "bottom": tk.StringVar(
-                value=str(self.driver.machine_settings.drawing_margin_bottom_mm)
-            ),
-            "left": tk.StringVar(
-                value=str(self.driver.machine_settings.drawing_margin_left_mm)
-            ),
-            "right": tk.StringVar(
-                value=str(self.driver.machine_settings.drawing_margin_right_mm)
-            ),
+            "top": tk.StringVar(value=str(self.driver.machine_settings.drawing_margin_top_mm)),
+            "bottom": tk.StringVar(value=str(self.driver.machine_settings.drawing_margin_bottom_mm)),
+            "left": tk.StringVar(value=str(self.driver.machine_settings.drawing_margin_left_mm)),
+            "right": tk.StringVar(value=str(self.driver.machine_settings.drawing_margin_right_mm)),
         }
-        self.machine_size_var = tk.StringVar(
-            value=f"{selected_machine.width_mm} x {selected_machine.height_mm} mm"
-        )
+        self.machine_size_var = tk.StringVar(value=f"{selected_machine.width_mm} x {selected_machine.height_mm} mm")
         self.progress_var = tk.DoubleVar(value=0.0)
         self.trace_report_var = tk.StringVar(value="No SVG loaded.")
         self.svg_bounds_warning_var = tk.StringVar(value="")
@@ -99,13 +90,9 @@ class AppWindow:
         self.pen_down_var = tk.DoubleVar(value=self.driver.plot_profile.pen_down_height)
         self.pen_apply_live_var = tk.BooleanVar(value=False)
         self.speed_penup_var = tk.DoubleVar(value=self.driver.plot_profile.speed_penup)
-        self.speed_pendown_var = tk.DoubleVar(
-            value=self.driver.plot_profile.speed_pendown
-        )
+        self.speed_pendown_var = tk.DoubleVar(value=self.driver.plot_profile.speed_pendown)
         self.accel_var = tk.DoubleVar(value=self.driver.plot_profile.accel)
-        self.jog_distance_var = tk.DoubleVar(
-            value=self.settings_service.app_state.jog_distance_mm
-        )
+        self.jog_distance_var = tk.DoubleVar(value=self.settings_service.app_state.jog_distance_mm)
         self.jog_position_var = tk.StringVar(value="—")
         self._jog_ref_valid = False
         self._jog_accu_x = 0.0  # machine-coord accumulator since last My home
@@ -114,12 +101,8 @@ class AppWindow:
         if saved_jog_mode not in {"physical", "table"}:
             saved_jog_mode = "physical"
         self.jog_mode_var = tk.StringVar(value=saved_jog_mode)
-        self.jog_mode_description_var = tk.StringVar(
-            value="Current: physical axes (+X / +Y)"
-        )
-        self.reordering_var = tk.StringVar(
-            value=self._reordering_label(self.driver.plot_profile.reordering)
-        )
+        self.jog_mode_description_var = tk.StringVar(value="Current: physical axes (+X / +Y)")
+        self.reordering_var = tk.StringVar(value=self._reordering_label(self.driver.plot_profile.reordering))
 
         self.status_label: ctk.CTkLabel | None = None
         self.profile_selector: ctk.CTkOptionMenu | None = None
@@ -151,6 +134,7 @@ class AppWindow:
 
         self._last_loaded_svg: Path | None = None
         self._last_reloadable_svg: Path | None = None
+        self._last_drawing_bbox: BBoxMm | None = None
         self._is_loading_svg = False
         self._svg_load_worker: threading.Thread | None = None
         self._loading_stage: str | None = None
@@ -162,6 +146,8 @@ class AppWindow:
         self._manual_action_stop_requested = False
         self._manual_action_stop_result: DriverCommandResult | None = None
         self._manual_action_worker: threading.Thread | None = None
+        self._last_seen_plot_state: PlotState | None = None
+        self._calibration_log_path = default_calibration_log_path()
 
         self.driver.add_profile_change_listener(self._on_driver_profile_changed)
         self._build_layout()
@@ -256,16 +242,10 @@ class AppWindow:
 
             if remaining_seconds >= 0:
                 remaining_text = format_duration(remaining_seconds)
-                return (
-                    f"{percent} - elapsed {elapsed_text} - "
-                    f"remaining {remaining_text} / {total_text}"
-                )
+                return f"{percent} - elapsed {elapsed_text} - remaining {remaining_text} / {total_text}"
 
             overtime_text = format_duration(-remaining_seconds)
-            return (
-                f"{percent} - elapsed {elapsed_text} - "
-                f"overtime +{overtime_text} / {total_text}"
-            )
+            return f"{percent} - elapsed {elapsed_text} - overtime +{overtime_text} / {total_text}"
 
         if progress.state in {
             PlotState.DRAWING,
@@ -339,9 +319,7 @@ class AppWindow:
 
         variable.trace_add("write", _sync_label)
 
-        ctk.CTkLabel(block, text=label, font=ctk.CTkFont(weight="bold")).grid(
-            row=0, column=0, sticky="w"
-        )
+        ctk.CTkLabel(block, text=label, font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, sticky="w")
         value_label.grid(row=0, column=1, sticky="e")
         ctk.CTkSlider(
             block,
@@ -417,10 +395,17 @@ class AppWindow:
     def _compose_status_text(self, *, state_text: str, metrics_text: str) -> str:
         return f"{self._status_message}\nState: {state_text} | {metrics_text}"
 
+    def _bbox_text(self) -> str:
+        bbox = self._last_drawing_bbox
+        if bbox is None:
+            return "-"
+        return f"{bbox.width:.1f} × {bbox.height:.1f} mm"
+
     def _detect_layer_speed_overrides(self, svg_path: str | Path) -> list[int]:
         try:
             root = ET.parse(str(svg_path)).getroot()
         except Exception:  # noqa: BLE001
+            logging.exception("Layer speed override scan failed")
             return []
 
         labels: list[str] = []
@@ -440,6 +425,50 @@ class AppWindow:
                 if 1 <= speed <= 110:
                     speeds.add(speed)
         return sorted(speeds)
+
+    def _maybe_log_plot_completion(self, progress: PlotProgress) -> None:
+        """Detect a real plot's DRAWING -> READY transition and record the
+        estimated-vs-actual duration, for time-estimation calibration."""
+        previous_state = self._last_seen_plot_state
+        self._last_seen_plot_state = progress.state
+        if previous_state != PlotState.DRAWING or progress.state != PlotState.READY:
+            return
+        actual = progress.last_run_duration_seconds
+        if actual is None:
+            return
+
+        estimated = progress.estimated_seconds
+        if estimated and estimated > 0:
+            ratio_text = f" ({actual / estimated * 100:.0f}%)"
+        else:
+            ratio_text = ""
+        self._append_trace_log(
+            f"Plot finished: estimated {format_duration(estimated)}, actual {format_duration(actual)}{ratio_text}"
+        )
+
+        svg_name = self._last_loaded_svg.name if self._last_loaded_svg is not None else "unknown.svg"
+        machine_settings = self.driver.machine_settings
+        plot_profile = self.driver.plot_profile
+        row = CalibrationRow(
+            svg_name=svg_name,
+            estimated_seconds=estimated,
+            actual_seconds=actual,
+            pen_lifts=progress.pen_lifts,
+            distance_pen_down_mm=progress.distance_pen_down_mm,
+            distance_total_mm=progress.distance_total_mm,
+            speed_penup=plot_profile.speed_penup,
+            speed_pendown=plot_profile.speed_pendown,
+            accel=plot_profile.accel,
+            pen_up_height=plot_profile.pen_up_height,
+            pen_down_height=plot_profile.pen_down_height,
+            machine_model=machine_settings.machine_model,
+            table_orientation=machine_settings.table_orientation,
+            digest=machine_settings.digest,
+        )
+        try:
+            append_calibration_row(self._calibration_log_path, row)
+        except OSError:
+            logging.exception("Failed to write time-estimation calibration log row")
 
     def _update_from_result(
         self,
@@ -461,6 +490,7 @@ class AppWindow:
 
     def _refresh_view(self) -> None:
         progress = self.driver.get_progress()
+        self._maybe_log_plot_completion(progress)
         if self._is_loading_svg:
             stage = self._loading_stage or "loading"
             elapsed = 0.0
@@ -478,27 +508,24 @@ class AppWindow:
         else:
             state_text = progress.state.value
             self.state_var.set(f"State: {state_text}")
-        self.svg_var.set(
-            f"SVG: {self._last_loaded_svg if self._last_loaded_svg is not None else 'none'}"
-        )
+        self.svg_var.set(f"SVG: {self._last_loaded_svg if self._last_loaded_svg is not None else 'none'}")
 
         estimated = format_duration(progress.estimated_seconds)
         elapsed = format_duration(progress.elapsed_seconds)
         dist = f"down {progress.distance_pen_down_mm:.1f} mm | total {progress.distance_total_mm:.1f} mm"
-        metrics_text = f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | Lifts: {progress.pen_lifts}"
-        self.metrics_var.set(metrics_text)
-        self.status_var.set(
-            self._compose_status_text(state_text=state_text, metrics_text=metrics_text)
+        metrics_text = (
+            f"Estimated: {estimated} | Elapsed: {elapsed} | {dist} | "
+            f"BBox: {self._bbox_text()} | Lifts: {progress.pen_lifts}"
         )
+        self.metrics_var.set(metrics_text)
+        self.status_var.set(self._compose_status_text(state_text=state_text, metrics_text=metrics_text))
 
         completion = 0.0
         if progress.estimated_seconds and progress.estimated_seconds > 0:
             completion = min(progress.elapsed_seconds / progress.estimated_seconds, 1.0)
         self.progress_var.set(completion)
         if self.progress_bar is not None:
-            self.progress_bar.set_with_text(
-                completion, self._progress_text(progress, completion)
-            )
+            self.progress_bar.set_with_text(completion, self._progress_text(progress, completion))
 
         has_svg = self._last_reloadable_svg is not None
         is_loading = self._is_loading_svg
@@ -510,75 +537,51 @@ class AppWindow:
 
         if self.load_button is not None:
             self.load_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.reload_button is not None:
             self.reload_button.configure(
-                state="normal"
-                if (has_svg and not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (has_svg and not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.home_button is not None:
             self.home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.machine_physical_home_button is not None:
             self.machine_physical_home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.machine_my_home_button is not None:
             self.machine_my_home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.trace_home_button is not None:
             self.trace_home_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.center_button is not None:
             self.center_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.trace_center_button is not None:
             self.trace_center_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.jog_pos_x_button is not None:
             self.jog_pos_x_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.jog_pos_y_button is not None:
             self.jog_pos_y_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.jog_neg_x_button is not None:
             self.jog_neg_x_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.jog_neg_y_button is not None:
             self.jog_neg_y_button.configure(
-                state="normal"
-                if (not is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (not is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.play_button is not None:
             self.play_button.configure(
@@ -587,15 +590,11 @@ class AppWindow:
             )
         if self.pause_button is not None:
             self.pause_button.configure(
-                state="normal"
-                if (is_drawing and not is_loading and not is_manual)
-                else "disabled"
+                state=("normal" if (is_drawing and not is_loading and not is_manual) else "disabled")
             )
         if self.stop_button is not None:
             self.stop_button.configure(
-                state="normal"
-                if ((is_drawing or is_paused or is_manual) and not is_loading)
-                else "disabled"
+                state=("normal" if ((is_drawing or is_paused or is_manual) and not is_loading) else "disabled")
             )
         self._update_jog_position_display()
 
@@ -646,9 +645,7 @@ class AppWindow:
         self.table_orientation_var.set(self.driver.machine_settings.table_orientation)
         self.machine_home_corner_var.set(self.driver.machine_settings.my_home_corner)
         for side, variable in self.machine_margin_vars.items():
-            variable.set(
-                str(getattr(self.driver.machine_settings, f"drawing_margin_{side}_mm"))
-            )
+            variable.set(str(getattr(self.driver.machine_settings, f"drawing_margin_{side}_mm")))
         self.machine_size_var.set(f"{machine.width_mm} x {machine.height_mm} mm")
         self._sync_svg_page_preview()
         self._update_jog_position_display()
@@ -701,9 +698,7 @@ class AppWindow:
             return
 
         self._last_reloadable_svg = svg_path
-        self._set_status_message(
-            f"Ready: last SVG available for reload ({svg_path.name})"
-        )
+        self._set_status_message(f"Ready: last SVG available for reload ({svg_path.name})")
 
     def _remember_last_svg_file(self, svg_path: Path) -> None:
         self._last_reloadable_svg = svg_path
@@ -825,9 +820,7 @@ class AppWindow:
             dialog.destroy()
 
         entry.bind("<Return>", lambda _event: submit())
-        ctk.CTkButton(dialog, text="Create", command=submit, height=32).pack(
-            pady=(0, 6)
-        )
+        ctk.CTkButton(dialog, text="Create", command=submit, height=32).pack(pady=(0, 6))
         self.root.wait_window(dialog)
 
         profile_name = result
@@ -902,6 +895,7 @@ class AppWindow:
             return
 
         self._last_loaded_svg = Path(path)
+        self._last_drawing_bbox = None
         svg_name = Path(path).name
         self._append_trace_separator(f"Load SVG: {svg_name}")
         self._is_loading_svg = True
@@ -948,6 +942,7 @@ class AppWindow:
                 estimate_elapsed = time.perf_counter() - estimate_started
                 estimate_value = self.driver.get_progress().estimated_seconds
         except Exception as exc:  # noqa: BLE001
+            logging.exception("Error while loading_svg ")
             load_elapsed = time.perf_counter() - load_started
             load_result = DriverCommandResult(
                 ok=False,
@@ -963,6 +958,7 @@ class AppWindow:
 
             if load_result.ok and self.svg_page_preview is not None:
                 self.svg_page_preview.set_svg(path)
+                self._last_drawing_bbox = self.svg_page_preview.get_drawing_bbox()
 
             self._update_from_result(load_result, action="Load")
             self._append_trace_log(f"Load duration: {load_elapsed:.2f}s")
@@ -977,10 +973,10 @@ class AppWindow:
             if estimate_result is not None:
                 self._update_from_result(estimate_result, action="Estimate")
                 estimate_txt = format_duration(estimate_value)
-                elapsed_str = (
-                    f"{estimate_elapsed:.1f}s" if estimate_elapsed is not None else "?"
-                )
+                elapsed_str = f"{estimate_elapsed:.1f}s" if estimate_elapsed is not None else "?"
                 summary = f"Estimated: {estimate_txt}  (computed in {elapsed_str})"
+                if self._last_drawing_bbox is not None:
+                    summary += f"  |  BBox: {self._bbox_text()}"
                 self._set_status_message(f"OK: {summary}")
                 self._set_status_style(ok=True)
                 self._append_trace_log(summary)
@@ -988,14 +984,19 @@ class AppWindow:
                 speed_pendown_mm_min = float(self.driver.plot_profile.speed_pendown)
                 speed_penup_in_s = _mm_min_to_inch_s(speed_penup_mm_min)
                 speed_pendown_in_s = _mm_min_to_inch_s(speed_pendown_mm_min)
+                estimate_progress = self.driver.get_progress()
                 self._append_trace_log(
                     "Estimate inputs: "
                     f"speed_penup={speed_penup_mm_min:.0f} mm/min "
                     f"({speed_penup_in_s:.4f} in/s preview), "
                     f"speed_pendown={speed_pendown_mm_min:.0f} mm/min "
                     f"({speed_pendown_in_s:.4f} in/s preview), "
-                    f"accel={self.driver.plot_profile.accel:.1f} -> "
-                    f"estimated={estimate_txt}"
+                    f"accel={self.driver.plot_profile.accel:.1f}, "
+                    f"digest={self.driver.machine_settings.digest} -> "
+                    f"estimated={estimate_txt}, "
+                    f"pen_lifts={estimate_progress.pen_lifts}, "
+                    f"distance_pen_down={estimate_progress.distance_pen_down_mm:.1f} mm, "
+                    f"distance_total={estimate_progress.distance_total_mm:.1f} mm"
                 )
 
             self._refresh_view()
@@ -1006,6 +1007,85 @@ class AppWindow:
             # Window may already be closed while background work is finishing.
             return
 
+    def _play_warning(self) -> tuple[str, tuple[str, str]] | None:
+        preview = self.svg_page_preview
+        if preview is None:
+            return None
+        if preview.page_fits_table() is False:
+            return ("Page overlap the Drawing surface.", ("#B42318", "#FF6B6B"))
+        if preview.bbox_exceeds_page() is True:
+            return (
+                "Bounding box overlap Page. The content will be clipped.",
+                ("#8A6D00", "#FFC107"),
+            )
+        return None
+
+    def _confirm_play(self, warning: tuple[str, tuple[str, str]] | None) -> bool:
+        dialog = ctk.CTkToplevel(self.root)
+        dialog.title("Confirm Play")
+        dialog.transient(self.root)
+        dialog.grab_set()
+        dialog.resizable(False, False)
+
+        if warning is not None:
+            text, color = warning
+            ctk.CTkLabel(
+                dialog,
+                text=text,
+                text_color=color,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                wraplength=260,
+                justify="center",
+            ).pack(padx=18, pady=(16, 4))
+
+        ctk.CTkLabel(
+            dialog,
+            text="Are you sure?",
+            font=ctk.CTkFont(size=13, weight="bold"),
+        ).pack(padx=18, pady=(12 if warning is None else 4, 12))
+
+        button_row = ctk.CTkFrame(dialog, fg_color="transparent")
+        button_row.pack(padx=18, pady=(0, 16))
+
+        result = False
+
+        def choose_yes() -> None:
+            nonlocal result
+            result = True
+            dialog.destroy()
+
+        def choose_no(_event: object = None) -> None:
+            nonlocal result
+            result = False
+            dialog.destroy()
+
+        no_button = ctk.CTkButton(button_row, text="No", command=choose_no, width=90)
+        no_button.grid(row=0, column=0, padx=6)
+        ctk.CTkButton(
+            button_row,
+            text="Yes",
+            command=choose_yes,
+            width=90,
+            fg_color="#B23A48",
+            hover_color="#9A2F3D",
+        ).grid(row=0, column=1, padx=6)
+
+        # "No" is the safe default: Enter/Escape always confirm it, regardless
+        # of which button currently has keyboard focus.
+        dialog.bind("<Return>", choose_no)
+        dialog.bind("<Escape>", choose_no)
+
+        dialog.update_idletasks()
+        width = dialog.winfo_width()
+        height = dialog.winfo_height()
+        x = self.root.winfo_x() + (self.root.winfo_width() // 2) - (width // 2)
+        y = self.root.winfo_y() + (self.root.winfo_height() // 2) - (height // 2)
+        dialog.geometry(f"+{x}+{y}")
+
+        no_button.focus_set()
+        self.root.wait_window(dialog)
+        return result
+
     def on_play_pause_resume(self) -> None:
         if self._is_manual_action_running:
             self._append_trace_log("Manual action in progress: wait or press Stop.")
@@ -1014,6 +1094,10 @@ class AppWindow:
         if progress.state == PlotState.PAUSED:
             self._update_from_result(self.driver.resume())
         else:
+            warning = self._play_warning()
+            if warning is not None and not self._confirm_play(warning):
+                self._append_trace_log("Play cancelled by user.")
+                return
             self._update_from_result(self.driver.start())
 
     def on_pause(self) -> None:
@@ -1074,9 +1158,7 @@ class AppWindow:
         self._run_manual_action_async("Home", self._go_to_my_home_and_reset)
 
     def on_machine_physical_home(self) -> None:
-        self._run_manual_action_async(
-            "Physical Home", self._physical_home_and_invalidate
-        )
+        self._run_manual_action_async("Physical Home", self._physical_home_and_invalidate)
 
     def on_machine_my_home(self) -> None:
         self._run_manual_action_async("Home", self._go_to_my_home_and_reset)
@@ -1090,9 +1172,7 @@ class AppWindow:
     def _sync_jog_controls(self) -> None:
         mode = self.jog_mode_var.get().strip().lower()
         if mode == "table":
-            description = (
-                "Current: table directions (right / left / forward / backward)"
-            )
+            description = "Current: table directions (right / left / forward / backward)"
             top_text = "Forward"
             left_text = "Left"
             right_text = "Right"
@@ -1165,9 +1245,7 @@ class AppWindow:
     def on_jog_bottom(self) -> None:
         distance = float(self.jog_distance_var.get())
         if self._jog_mode_is_table():
-            self._jog_in_current_mode(
-                "backward", f"Backward {format_float(distance)} mm"
-            )
+            self._jog_in_current_mode("backward", f"Backward {format_float(distance)} mm")
             return
         self._jog_in_current_mode("bottom", f"-Y {format_float(distance)} mm")
 
@@ -1206,16 +1284,8 @@ class AppWindow:
         visual_down = self._jog_accu_x * x_axis[1] + self._jog_accu_y * y_axis[1]
         ms = self.driver.machine_settings
         corner = ms.my_home_corner.strip().lower()
-        home_x = (
-            ms.drawing_margin_left_mm
-            if "left" in corner
-            else table_w - ms.drawing_margin_right_mm
-        )
-        home_y = (
-            ms.drawing_margin_top_mm
-            if "top" in corner
-            else table_h - ms.drawing_margin_bottom_mm
-        )
+        home_x = ms.drawing_margin_left_mm if "left" in corner else table_w - ms.drawing_margin_right_mm
+        home_y = ms.drawing_margin_top_mm if "top" in corner else table_h - ms.drawing_margin_bottom_mm
         return home_x + visual_right, home_y + visual_down
 
     def _update_jog_position_display(self) -> None:
@@ -1224,9 +1294,7 @@ class AppWindow:
             self.jog_position_var.set("—  go to Home to set reference")
             return
         x_vis, y_vis = pos
-        self.jog_position_var.set(
-            f"X from left: {x_vis:.0f} mm  ·  Y from top: {y_vis:.0f} mm"
-        )
+        self.jog_position_var.set(f"X from left: {x_vis:.0f} mm  ·  Y from top: {y_vis:.0f} mm")
 
     def on_jog_set_margin(self, side: str) -> None:
         pos = self._jog_visual_position()
@@ -1274,9 +1342,7 @@ class AppWindow:
         action_func: Callable[[], DriverCommandResult],
     ) -> None:
         if self._is_loading_svg:
-            self._append_trace_log(
-                "Cannot start manual action while SVG loading is running."
-            )
+            self._append_trace_log("Cannot start manual action while SVG loading is running.")
             return
         if self._is_manual_action_running:
             self._append_trace_log("Another manual action is already running.")
@@ -1307,6 +1373,7 @@ class AppWindow:
         try:
             action_result = action_func()
         except Exception as exc:  # noqa: BLE001
+            logging.exception(f"Manual action {action_name!r} failed")
             action_result = DriverCommandResult(
                 ok=False,
                 message=f"Unexpected {action_name.lower()} failure: {exc}",

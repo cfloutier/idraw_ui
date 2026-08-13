@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(./.venv/Scripts/python.exe -c ' *)",
+      "Bash(python \"C:/Users/CFLOUT~1/AppData/Local/Temp/claude/e--dev-idraw-ui/f254e659-c20d-4f8d-bb4a-6af0a17f16e3/scratchpad/gen_long_hop_svg.py\")",
+      "Bash(PYTHONPATH=src ./.venv/Scripts/python.exe -c ' *)",
+      "Bash(ls -la ~/.claude/projects/ 2>&1 | head -50)",
+      "Read(//c/Users/cfloutier/.claude/projects/**)",
+      "Bash(ls -1t ~/.claude/projects/e--dev-idraw-ui/*.jsonl 2>&1 | head -50 | wc -l *)",
+      "Read(//c/Users/cfloutier/.claude/projects/e--dev-idraw-ui/**)",
+      "Bash(python \"C:/Users/CFLOUT~1/AppData/Local/Temp/claude/e--dev-idraw-ui/f254e659-c20d-4f8d-bb4a-6af0a17f16e3/scratchpad/scan_permissions.py\")",
+      "Bash(python -m py_compile \"e:/dev/idraw2_internal/idraw2_0internal/dripfeed.py\")",
+      "Bash(python -m py_compile \"e:/dev/idraw2_internal/idraw2_0internal/dripfeed.py\" \"e:/dev/idraw2_internal/idraw2_0internal/pen_handling.py\")"
+    ]
+  }
+}

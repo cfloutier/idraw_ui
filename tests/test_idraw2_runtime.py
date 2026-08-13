@@ -108,9 +108,7 @@ class Idraw2InternalRuntimeTests(unittest.TestCase):
         session = _logical_home_session()
 
         _apply_logical_home_to_digest(session, "top-left")
-        first_vertices = [
-            vertex.copy() for vertex in session.digest.layers[0].paths[0].subpaths[0]
-        ]
+        first_vertices = [vertex.copy() for vertex in session.digest.layers[0].paths[0].subpaths[0]]
         _apply_logical_home_to_digest(session, "top-left")
 
         self.assertEqual(
@@ -134,9 +132,7 @@ class Idraw2InternalRuntimeTests(unittest.TestCase):
         self.assertEqual(metrics["pen_lifts"], 3)
         self.assertEqual(metrics["estimated_seconds"], 12.0)
         self.assertGreater(metrics["distance_pen_down_mm"], 0.0)
-        self.assertGreater(
-            metrics["distance_total_mm"], metrics["distance_pen_down_mm"]
-        )
+        self.assertGreater(metrics["distance_total_mm"], metrics["distance_pen_down_mm"])
 
     def test_start_and_pause_cycle(self) -> None:
         factory = FakeSessionFactory(wait_for_pause=True)
@@ -164,9 +160,7 @@ class Idraw2InternalRuntimeTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             svg_path = pathlib.Path(tmp_dir) / "input.svg"
-            svg_path.write_text(
-                "<svg xmlns='http://www.w3.org/2000/svg' id='source'></svg>"
-            )
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg' id='source'></svg>")
 
             runtime.load_svg(svg_path)
             runtime.prepare()
@@ -251,6 +245,67 @@ class Idraw2InternalRuntimeTests(unittest.TestCase):
         self.assertTrue(session.options.preview)
         self.assertAlmostEqual(session.options.speed_penup, 8000.0 / (25.4 * 60.0))
         self.assertAlmostEqual(session.options.speed_pendown, 2000.0 / (25.4 * 60.0))
+
+    def test_last_run_duration_survives_after_thread_completes(self) -> None:
+        factory = FakeSessionFactory()
+        runtime = Idraw2InternalRuntime(session_factory=factory)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+
+            runtime.load_svg(svg_path)
+            runtime.start()
+            while runtime._thread_running():
+                time.sleep(0.01)
+            status_right_after = runtime.get_status()
+            status_later = runtime.get_status()
+
+        self.assertEqual(status_right_after["state"], "ready")
+        self.assertIsNotNone(status_right_after["last_run_duration_seconds"])
+        self.assertGreaterEqual(status_right_after["last_run_duration_seconds"], 0.0)
+        # Unlike elapsed_seconds (which resets to 0 once the thread ends),
+        # last_run_duration_seconds must survive until the next run starts.
+        self.assertEqual(status_right_after["elapsed_seconds"], 0.0)
+        self.assertEqual(
+            status_later["last_run_duration_seconds"],
+            status_right_after["last_run_duration_seconds"],
+        )
+
+    def test_last_run_duration_resets_when_new_run_starts(self) -> None:
+        factory = FakeSessionFactory()
+        runtime = Idraw2InternalRuntime(session_factory=factory)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+
+            runtime.load_svg(svg_path)
+            runtime.start()
+            while runtime._thread_running():
+                time.sleep(0.01)
+            self.assertIsNotNone(runtime.get_status()["last_run_duration_seconds"])
+
+            runtime.start()
+            status_while_running = runtime.get_status()
+            while runtime._thread_running():
+                time.sleep(0.01)
+
+        self.assertIsNone(status_while_running["last_run_duration_seconds"])
+
+    def test_last_run_duration_not_set_when_paused(self) -> None:
+        factory = FakeSessionFactory(wait_for_pause=True)
+        runtime = Idraw2InternalRuntime(session_factory=factory)
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            svg_path = pathlib.Path(tmp_dir) / "input.svg"
+            svg_path.write_text("<svg xmlns='http://www.w3.org/2000/svg'></svg>")
+
+            runtime.load_svg(svg_path)
+            runtime.start()
+            runtime.pause()
+
+        self.assertIsNone(runtime.get_status()["last_run_duration_seconds"])
 
     def test_start_keeps_raw_speeds_for_real_plot(self) -> None:
         factory = FakeSessionFactory(wait_for_pause=True)

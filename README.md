@@ -11,7 +11,7 @@ Download the latest release ZIP from the repository, unzip it anywhere, and
 double-click **`idraw_ui.exe`** — no Python installation required.
 
 > For developers who want to run from source or contribute, see
-> [`docs/developer_notes.md`](docs/developer_notes.md).
+> [`docs/dev_setup.md`](docs/dev_setup.md).
 
 ---
 
@@ -46,6 +46,24 @@ The preview on the right shows where the SVG will be placed on the table, based
 on the current machine, orientation, home corner, and drawing margins. If the
 SVG does not fit inside the configured drawing area, **OUT OF BOUNDS** appears
 beside the Play button and the preview outline turns red.
+
+After Load/Reload, the preview also outlines the actual size of the drawing
+inside the page (dashed magenta rectangle) and shows its dimensions next to
+the page size at the bottom (`drawing W × H mm`). This is computed directly
+from the SVG geometry — the drawing is not rendered — so it stays fast even
+for complex files.
+
+**Known limitation — UI freezes during estimate on complex SVGs.** Load and
+Reload run the estimate on a background thread so the window shouldn't lock
+up, but with SVGs that have many separate paths (a few hundred or more —
+dense stippling/hatching files are the main case), the window can still
+appear unresponsive for the whole estimate: the internal path-joining step
+that prepares the drawing is CPU-heavy pure-Python work, and under Windows a
+background thread that saturates the CPU like this tends to starve the main
+window's event loop even though it's not actually deadlocked. The status bar
+still updates once the estimate finishes; simple files are unaffected. No
+code changes planned for this right now — noted here so it isn't mistaken
+for a crash.
 
 ---
 

@@ -60,6 +60,7 @@ class PlotProgress:
     state: PlotState = PlotState.IDLE
     elapsed_seconds: float = 0.0
     estimated_seconds: float | None = None
+    last_run_duration_seconds: float | None = None
     distance_pen_down_mm: float = 0.0
     distance_total_mm: float = 0.0
     pen_lifts: int = 0

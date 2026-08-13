@@ -5,6 +5,80 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] — 2026-08-12
+
+### Added
+- **Time-estimation calibration tooling** — first step of the "Estimated: -" precision
+  work: root-caused why plot estimates are always far below actual plot time.
+  - `idraw2_internal` (vendor): `PenLiftTiming.update()` (`pen_handling.py`) was
+    entirely commented out, so every pen lift/lower contributed `0 ms` to the
+    estimate regardless of `pen_lifts` count — a major, drawing-dependent source
+    of under-estimation. Re-implemented from the upstream AxiDraw driver this
+    code was forked from, with the six missing servo timing constants restored
+    in `idraw2_0_conf.py`. These are AxiDraw's RC-servo defaults as a starting
+    point only — this machine's pen lift is a stepper motor, so real values will
+    need hardware calibration.
+  - The actual duration of a finished real plot was never captured — it reset to
+    `0.0` the instant the plot thread ended. `Idraw2InternalRuntime` now keeps
+    `last_run_duration_seconds` until the next plot starts.
+  - New `logs/time_estimation_calibration.csv` (gitignored): every real (non-preview)
+    plot that finishes normally appends estimated vs. actual seconds plus
+    drawing/profile metadata (`pen_lifts`, distances, speeds, accel, pen heights,
+    machine model/orientation, digest mode), for calibrating the model against
+    real measurements over multiple test drawings.
+  - Trace log now shows `Plot finished: estimated Xs, actual Ys (Z%)` right when a
+    real plot completes, and the "Estimate inputs" diagnostic log now also
+    includes `pen_lifts`, both distances, and `digest`.
+  - `svg_calibration/` — 8 purpose-built test SVGs (see `svg_calibration/README.md`)
+    isolating pen-lift count, pen-down distance, and pen-up hop length/count
+    independently, to gather clean calibration data instead of only ever seeing
+    these effects mixed together as in a real drawing.
+
+### Fixed
+- `idraw2_internal` (vendor): `dripfeed.feed_sm()` real-mode plotting sleeps
+  `move_time - 30 ms` for every motion sub-command longer than 50 ms (compensating
+  for serial/transmission overhead), but preview mode always added the full
+  `move_time` to the estimate — never mirroring that 30 ms discount. Invisible on
+  drawings with few or short motion segments, but on drawings with many long
+  (> 50 ms) segments — e.g. many separated, non-trivial pen-up hops — this
+  compounded into a large, systematic overestimate. Root-caused with the
+  `svg_calibration/` test set: an isolated single long pen-up hop stayed accurate
+  (~100-103%) at any speed, many short hops stayed accurate (100.0%), but many
+  *repeated long* hops reached as low as 74% (properties of 03/06 not shared by
+  07/08) — pinpointing the per-segment, length-gated discount as the missing
+  piece. Preview now applies the same discount.
+- `idraw2_internal` (vendor): Resume after Pause could silently drop points on
+  dot-heavy (stippling) drawings. `DocDigest.crop()`, which discards the
+  already-plotted portion of a paused digest, decided which whole paths to
+  skip using cumulative pen-down distance — for a long run of near-zero-length
+  paths (isolated dots), that distance barely advances whether a dot was
+  drawn or not, so genuinely un-plotted dots could be misclassified as
+  "already plotted" and dropped. Added an exact parallel counter
+  (`PlotStats.paths_completed`, persisted as `pause_path_index` in the PLOB)
+  that `crop()` now uses instead, for an unambiguous resume point regardless
+  of path length; falls back to the previous distance-only behavior for
+  resume files saved before this field existed. Not yet validated on real
+  hardware with an in-progress stippling job — see `docs/AI_HANDOFF_PLAN.md`.
+
+## [0.9.2] — 2026-08-12
+
+### Added
+- **Drawing bounding box** in the SVG page preview — after Load/Reload, the actual size of the drawing inside the page is computed (from path/rect/circle/ellipse/line/polyline/polygon geometry and nested transforms, without rendering the SVG) and shown as an outline on the preview plus a `drawing W × H mm` label
+- **Play confirmation dialog** — clicking Play now asks "Are you sure?" (Yes/No, default No, confirmed by Return/Escape) before starting a plot. Shows a red warning above it if the page doesn't fit the machine's drawing area, or a yellow warning if the drawing extends past the page (content will be clipped)
+- `Estimated:`/`Drawing:` fields and the SVG bounding box size are now also logged and shown in the Trace status summary after Load/Reload
+- `logging.exception(...)` added to every exception handler in the backend (`driver.py`, `idraw2_facade.py`, `idraw2_runtime.py`) and the relevant UI handlers, so failures print a full traceback to the console instead of only a short message
+
+### Fixed
+- Drawing bounding box could include content from hidden Inkscape layers (`display:none` / `visibility:hidden`), overstating the drawing size
+- `docs/dev_setup.md` installed `idraw2_internal` with `pip install --no-deps`, so its own dependencies (`requests`, `tqdm`, `ink_extensions`) were never installed on a fresh machine — caused `Prepare failed: No module named 'requests'` and a silent "Estimated: -" with all metrics at zero. `--no-deps` removed so the editable install pulls them in automatically
+- `Idraw2Facade.prepare()` crashed with `TypeError: float() argument must be ... not 'NoneType'` when the loaded SVG had nothing to draw (runtime reports `estimated_seconds: None`); now handled and shown as "Estimated: -" instead of crashing the load
+
+### Changed
+- Bounding box outline now drawn with a white halo behind a dashed magenta line so it stays legible even when it coincides with the page border (e.g. artwork that traces its own page frame)
+- Preview "Up" direction arrow disabled (commented out, not removed) — it was only useful for debugging table/home orientation
+- Developer documentation reorganized: `docs/developer_notes.md` replaced by `docs/dev_setup.md` (install/build only); architecture and machine-model-addition notes moved to `docs/architecture_decisions.md`; project status/next-plans consolidated in `docs/AI_HANDOFF_PLAN.md`
+- Ruff `line-length` raised from 88 to 120
+
 ## [0.9.1] — 2026-08-09
 
 ### Fixes
