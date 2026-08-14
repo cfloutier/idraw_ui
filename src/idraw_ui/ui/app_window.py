@@ -972,11 +972,15 @@ class AppWindow:
 
             if estimate_result is not None:
                 self._update_from_result(estimate_result, action="Estimate")
+                estimate_progress = self.driver.get_progress()
                 estimate_txt = format_duration(estimate_value)
                 elapsed_str = f"{estimate_elapsed:.1f}s" if estimate_elapsed is not None else "?"
                 summary = f"Estimated: {estimate_txt}  (computed in {elapsed_str})"
                 if self._last_drawing_bbox is not None:
                     summary += f"  |  BBox: {self._bbox_text()}"
+                caveat = self._estimate_confidence_caveat(estimate_progress)
+                if caveat is not None:
+                    summary += f"  |  {caveat}"
                 self._set_status_message(f"OK: {summary}")
                 self._set_status_style(ok=True)
                 self._append_trace_log(summary)
@@ -984,7 +988,6 @@ class AppWindow:
                 speed_pendown_mm_min = float(self.driver.plot_profile.speed_pendown)
                 speed_penup_in_s = _mm_min_to_inch_s(speed_penup_mm_min)
                 speed_pendown_in_s = _mm_min_to_inch_s(speed_pendown_mm_min)
-                estimate_progress = self.driver.get_progress()
                 self._append_trace_log(
                     "Estimate inputs: "
                     f"speed_penup={speed_penup_mm_min:.0f} mm/min "
@@ -1006,6 +1009,29 @@ class AppWindow:
         except RuntimeError:
             # Window may already be closed while background work is finishing.
             return
+
+    @staticmethod
+    def _estimate_confidence_caveat(progress: PlotProgress) -> str | None:
+        """Qualitative warning for drawings where the time estimate is known
+        to run optimistic: many pen lifts combined with long pen-up hops
+        (many motion segments crossing the real-vs-preview discount
+        threshold in dripfeed.feed_sm()). Not a numeric correction - the
+        calibration data doesn't support a reliable one (see
+        svg_calibration/README.md, "Session-overhead hypothesis": a naive
+        fit corrupts already-accurate drawings, e.g. predicting negative
+        time for short jobs). Thresholds are heuristic, tuned against that
+        calibration set: 03/05/06 (20-151 lifts, 40+ mm avg hops) trigger it
+        and are 10-28% optimistic; 02/04/07/08 (2-301 lifts but short/rare
+        hops) don't trigger it and are already accurate.
+        """
+        lifts = progress.pen_lifts
+        if lifts <= 20:
+            return None
+        pen_up_mm = progress.distance_total_mm - progress.distance_pen_down_mm
+        avg_hop_mm = pen_up_mm / lifts
+        if avg_hop_mm <= 10:
+            return None
+        return "Note: estimate may be optimistic by 10-30% (many pen lifts + long pen-up hops)"
 
     def _play_warning(self) -> tuple[str, tuple[str, str]] | None:
         preview = self.svg_page_preview

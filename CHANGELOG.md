@@ -33,6 +33,14 @@ Version numbers follow [Semantic Versioning](https://semver.org/).
     isolating pen-lift count, pen-down distance, and pen-up hop length/count
     independently, to gather clean calibration data instead of only ever seeing
     these effects mixed together as in a real drawing.
+  - Qualitative confidence caveat on the estimate: drawings with many pen lifts
+    (>20) and long average pen-up hops (>10 mm) now show "Note: estimate may be
+    optimistic by 10-30% (many pen lifts + long pen-up hops)" next to the
+    estimated duration. Ruled out an automatic numeric correction — the
+    calibration data isn't rich enough to fit one safely (a naive regression
+    predicted *negative* durations for already-accurate short jobs); a
+    qualitative warning was the safer choice. See `svg_calibration/README.md`
+    for the data behind the heuristic's thresholds.
 
 ### Fixed
 - `idraw2_internal` (vendor): `dripfeed.feed_sm()` real-mode plotting sleeps

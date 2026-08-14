@@ -180,13 +180,39 @@ This separation must stay in place to avoid coupling UI directly to runtime inte
     wasn't captured by per-event instrumentation — likely one-time
     session-level overhead (homing, `servo_init()`, return-to-park at the
     end) rather than anything that scales with lift/segment count.
+- **Session-overhead hypothesis tested and ruled out (2026-08-14).** Directly
+  instrumented every one-time phase of a real plot (`serial_connect`,
+  `prepare_document`, `servo_init`, per-path trajectory planning,
+  return-to-park): together they total only ~1.1-2.6 s across every run
+  tested, nowhere near the tens-of-seconds gap. The entire gap is inside the
+  real per-segment/per-lift execution loop, confirming the diagnosis below
+  was already correct. Follow-up speed-varied runs also show the
+  estimate/actual ratio is **not a constant percentage** — it moves with
+  `speed_pendown`/`speed_penup` and can even flip sign. Full data and tables
+  in `svg_calibration/README.md` ("Session-overhead hypothesis: tested and
+  ruled out").
 - **Still needed**: this points to `move_time` itself (in
   `idraw2_0internal/motion.py::compute_segment()`) needing a communication-
-  latency floor added to short segments, not just a fixed threshold-gated
-  discount — a bigger change than this session's two fixes. Also worth
-  measuring the ~15.74 s session-level overhead directly (not yet
-  instrumented) before touching `compute_segment()`. Re-run `07`/`08` too
-  once changed, to confirm they don't regress (they were already accurate).
+  latency floor added to short segments, scaled correctly across the speed
+  range — not a fixed threshold-gated discount like the existing `-30 ms`
+  gate. A bigger change than this session's fixes; left for a dedicated
+  session. Re-run `07`/`08` too once changed, to confirm they don't regress
+  (they were already accurate).
+- **Tried to derive that correction from data twice more (2026-08-14),
+  both inconclusive** — full detail in `svg_calibration/README.md`
+  ("Attempted per-segment raw-data fit: also inconclusive"). Raw per-segment
+  timing turned out bursty/firmware-buffered, not a clean function of
+  `move_time`, and doesn't even sum to the known real total (150
+  `pen_raise`/`pen_lower` calls dominate a ~24 s chunk never isolated). A
+  pragmatic whole-run linear regression against the existing calibration
+  CSV looked good in aggregate (R²=0.94) but is unsafe: it predicts a
+  *negative* duration for `08` (already accurate). **Decision**: no
+  automatic numeric correction shipped. Added a qualitative caveat instead
+  — `AppWindow._estimate_confidence_caveat()` shows "estimate may be
+  optimistic by 10-30%" next to the estimate when `pen_lifts > 20` and
+  average pen-up hop `> 10 mm` (tuned against this dataset). A real fix
+  still needs `compute_segment()`'s communication-latency floor above, with
+  much more calibration data than currently available.
 
 3. Play/Pause reliability fixes
 

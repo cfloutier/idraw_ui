@@ -149,3 +149,103 @@ ratio should move in a consistent direction as the gap grows if the model's
 
 Regenerated with a small script (not checked in) if the geometry ever needs
 tweaking — regular SVG files, safe to hand-edit too.
+
+## Session-overhead hypothesis: tested and ruled out (2026-08-14)
+
+`AI_HANDOFF_PLAN.md` flagged the ~15.74 s (28%) of the combined `03`+`06`
+gap not explained by per-event instrumentation as "likely one-time
+session-level overhead (homing, `servo_init()`, return-to-park)". Tested
+this directly with temporary timing logs around every one-time phase of a
+real plot in `idraw2_0internal/idraw.py`: `serial_connect()` (port-open
+handshake), `prepare_document()` (SVG re-parse + `connect_nearby_ends()`
+optimization pass — this also rules out a second, related hypothesis that
+document-prep CPU time was the culprit), `servo_init()`, per-path
+`motion.trajectory()` planning (summed across the whole plot), and the
+return-to-park move.
+
+Result, on `03` (two separate real-hardware runs at baseline settings):
+
+| Phase | Run 1 | Run 2 |
+| --- | --- | --- |
+| `serial_connect` | 0.025 s | 0.027 s |
+| `prepare_document` | 0.009 s | 0.008 s |
+| `servo_init` | 0.003 s | 0.003 s |
+| `trajectory_planning` (150 paths, summed) | 0.016 s | — |
+| `return_to_park` | 1.115 s | 1.216 s |
+| **Total one-time overhead** | **1.168 s** | **~1.25 s** |
+| Estimated vs. actual gap (same run) | 25.39 s | ~25 s |
+
+One-time overhead is ~1.1-2.6 s across every run tested (also confirmed on
+`06`) — nowhere near the tens-of-seconds gap. **This hypothesis is
+conclusively ruled out.** The entire gap is inside the real per-segment/
+per-lift execution loop (`dripfeed.feed_sm()` + `pen_raise`/`pen_lower`),
+confirming the original diagnosis (a communication-latency floor missing
+from `compute_segment()`'s `move_time` model) was already the right place
+to look.
+
+**Follow-up: the gap is not a constant percentage.** Re-ran `03`/`06` at
+several `speed_pendown`/`speed_penup` values away from baseline (2000/8000):
+
+| Fichier | pendown | penup | Estimé | Réel | Estimé/Réel |
+| --- | --- | --- | --- | --- | --- |
+| `03` (baseline) | 2000 | 8000 | 91.14 s | 65.76 s | 138.6% (surestime) |
+| `03` | 693 (lent) | 8000 | 73.89 s | 81.03 s | **91.2% (sous-estime)** |
+| `03` | 3596 (rapide) | 8000 | 83.94 s | 63.74 s | 131.7% (surestime) |
+| `03` | 2000 | 2927 (lent) | 121.79 s | 100.93 s | 120.7% (surestime) |
+| `06` (baseline) | 2000 | 8000 | 138.48 s | 107.75 s | 128.5% (surestime) |
+| `06` | 2000 | 2927 (lent) | 239.97 s | 222.84 s | 107.7% (surestime) |
+| `06` | 2000 | 9692 (rapide) | 129.92 s | 97.09 s | 133.8% (surestime) |
+
+The estimate/actual ratio moves with speed and can even flip sign (slowing
+`speed_pendown` well below baseline flips `03` from a large overestimate to
+a mild *under*estimate) — ruling out a flat correction factor. The real
+fix has to live in `compute_segment()`'s per-segment `move_time` model
+(motion.py), scaled correctly across the speed range, not a fixed
+discount like the existing `-30 ms` gate. Not yet investigated further;
+left for a dedicated session given the scope (per `AI_HANDOFF_PLAN.md`).
+Instrumentation was temporary and has been removed from the diff.
+
+### Attempted per-segment raw-data fit: also inconclusive
+
+Tried once more, capturing every individual `SM` command's `(move_time,
+actual_ms)` pair during one full real run of `03` (2217 rows, logged
+temporarily to a raw CSV, since removed). Two findings, both negative:
+
+1. **The per-segment relationship is bursty, not a clean function of
+   `move_time`.** For the *same* theoretical `move_time` (25-26 ms), real
+   duration ranged from 5 ms to 82 ms depending on where the segment fell in
+   a run. Pattern looks like firmware command buffering: `command()`
+   (`drawcore_serial.py`) blocks on `readline()` waiting for the
+   controller's "ok" — fast while the firmware's buffer has room, then
+   blocked in bursts once it fills. No clean per-segment formula is fittable
+   from this.
+2. **The captured `SM`-command total undershoots the known real total by a
+   wide margin.** Sum of all 2217 `actual_ms` readings = 40.4 s, but the
+   same file/settings' real `plot_document` total (measured separately,
+   see above) is ~64.6 s of pure motion time. The ~24 s gap is presumably
+   dominated by the 150 `pen_raise`/`pen_lower` calls (not `SM` moves, not
+   captured by this pass) plus per-iteration overhead — never isolated.
+
+**Then tried a pragmatic pivot: fit a correction directly against the
+existing whole-run `logs/time_estimation_calibration.csv` data instead**
+(28 rows, ignore per-segment physics entirely). A plain linear regression
+(`actual = 0.919 × estimated − 5.31`, R²=0.94) looks good in aggregate but
+is dangerous in practice: applied to `08` (already accurate, ~3 pen lifts),
+it predicts a **negative** duration (est. 5.07 s → predicted -0.65 s).
+Files with few pen lifts (`02`, `04`, `08`) sit at ratio ≈1.0 already;
+files with many lifts *and* long hops (`03`, `05`, `06`) sit at 0.72-0.97.
+A single global regression squeezes a line through both regimes and
+corrupts the already-good one. Confirmed the real driver isn't pen-lift
+count alone either: `07` has the most lifts of any file (301) but stays at
+ratio 1.000, because its hops are short enough to mostly stay under the
+50 ms real/preview discount threshold — it's the *combination* of lift
+count and hop length (interacting with the `-30 ms` gate) that matters, not
+either alone, and there isn't enough data (~10 distinct configurations) to
+fit that safely.
+
+**Decision**: no automatic numeric correction. Added a qualitative caveat
+instead — `AppWindow._estimate_confidence_caveat()`
+(`src/idraw_ui/ui/app_window.py`), shown next to the estimate when
+`pen_lifts > 20` and average pen-up hop `> 10 mm` (thresholds tuned against
+this dataset: catches `03`/`05`/`06`, spares `02`/`04`/`07`/`08`). See
+`tests/test_estimate_confidence_caveat.py`.
