@@ -1,11 +1,11 @@
 accel: 75.0
 digest: 1
-name: posca
+name: dots
 pen_down_command: null
-pen_down_height: 7.922651933701657
+pen_down_height: 6.342541436464089
 pen_move_speed: null
 pen_up_command: null
-pen_up_height: 0.26519337016574585
-reordering: 0
+pen_up_height: 2.707182320441989
+reordering: 4
 speed_pendown: 2000.0
 speed_penup: 8000.0

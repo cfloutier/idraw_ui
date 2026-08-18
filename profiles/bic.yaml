@@ -2,10 +2,10 @@ accel: 75.0
 digest: 1
 name: bic
 pen_down_command: null
-pen_down_height: 5.0
+pen_down_height: 6.353591160220995
 pen_move_speed: null
 pen_up_command: null
-pen_up_height: 0.5
-reordering: 0
-speed_pendown: 2000.0
+pen_up_height: 0.0
+reordering: 2
+speed_pendown: 1218.3425414364642
 speed_penup: 8000.0
