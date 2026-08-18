@@ -2,6 +2,8 @@ from __future__ import annotations
 
 
 import logging
+
+
 import re
 import threading
 import time
@@ -379,9 +381,17 @@ class AppWindow:
     def _append_trace_log(self, line: str) -> None:
         if self.trace_log is None:
             return
+        content = line.rstrip()
         timestamp = time.strftime("%H:%M:%S")
         self.trace_log.configure(state="normal")
-        self.trace_log.insert("end", f"[{timestamp}] {line.rstrip()}\n")
+        # Collapse consecutive identical lines into one, keeping only the
+        # latest timestamp - repeated live-apply/save messages otherwise
+        # flood the log with no new information.
+        last_line = self.trace_log.get("end-2l", "end-1l").rstrip("\n")
+        last_content = last_line.split("] ", 1)[1] if "] " in last_line else last_line
+        if last_content == content:
+            self.trace_log.delete("end-2l", "end-1l")
+        self.trace_log.insert("end", f"[{timestamp}] {content}\n")
         self.trace_log.see("end")
         self.trace_log.configure(state="disabled")
 
@@ -438,13 +448,17 @@ class AppWindow:
             return
 
         estimated = progress.estimated_seconds
+        self._append_trace_separator("Plot finished")
+        self._append_trace_log(f"Estimated time: {format_duration(estimated)}")
+        self._append_trace_log(f"Actual time: {format_duration(actual)}")
         if estimated and estimated > 0:
-            ratio_text = f" ({actual / estimated * 100:.0f}%)"
+            diff_seconds = actual - estimated
+            diff_pct = diff_seconds / estimated * 100
+            sign = "-" if diff_seconds < 0 else "+"
+            diff_text = f"{sign}{format_duration(abs(diff_seconds))} ({sign}{abs(diff_pct):.0f}%)"
         else:
-            ratio_text = ""
-        self._append_trace_log(
-            f"Plot finished: estimated {format_duration(estimated)}, actual {format_duration(actual)}{ratio_text}"
-        )
+            diff_text = "n/a (no estimate)"
+        self._append_trace_log(f"Difference: {diff_text}")
 
         svg_name = self._last_loaded_svg.name if self._last_loaded_svg is not None else "unknown.svg"
         machine_settings = self.driver.machine_settings
@@ -475,6 +489,7 @@ class AppWindow:
         result: DriverCommandResult,
         *,
         action: str | None = None,
+        log: bool = True,
     ) -> None:
         progress = self.driver.get_progress()
         self.state_var.set(f"State: {progress.state.value}")
@@ -485,7 +500,8 @@ class AppWindow:
         else:
             self._set_status_message(f"ERROR: {action_prefix}{result.message}")
             self._set_status_style(ok=False)
-        self._append_trace_log(self._status_message)
+        if log:
+            self._append_trace_log(self._status_message)
         self._refresh_view()
 
     def _refresh_view(self) -> None:
@@ -635,6 +651,7 @@ class AppWindow:
         self.settings_service.save_profile(profile)
         self.settings_service.set_active_profile(profile.name)
         self._sync_profile_selector(profile.name)
+        self._append_trace_log(f"Profile '{profile.name}' saved")
 
     def _persist_machine_settings(self) -> None:
         self.settings_service.save_machine_settings(self.driver.machine_settings)
@@ -971,35 +988,37 @@ class AppWindow:
                 )
 
             if estimate_result is not None:
-                self._update_from_result(estimate_result, action="Estimate")
+                self._update_from_result(estimate_result, action="Estimate", log=False)
                 estimate_progress = self.driver.get_progress()
                 estimate_txt = format_duration(estimate_value)
                 elapsed_str = f"{estimate_elapsed:.1f}s" if estimate_elapsed is not None else "?"
-                summary = f"Estimated: {estimate_txt}  (computed in {elapsed_str})"
-                if self._last_drawing_bbox is not None:
-                    summary += f"  |  BBox: {self._bbox_text()}"
                 caveat = self._estimate_confidence_caveat(estimate_progress)
+
+                status_summary = f"Estimated: {estimate_txt}  (computed in {elapsed_str})"
+                if self._last_drawing_bbox is not None:
+                    status_summary += f"  |  BBox: {self._bbox_text()}"
                 if caveat is not None:
-                    summary += f"  |  {caveat}"
-                self._set_status_message(f"OK: {summary}")
+                    status_summary += f"  |  {caveat}"
+                self._set_status_message(f"OK: {status_summary}")
                 self._set_status_style(ok=True)
-                self._append_trace_log(summary)
+
+                distance_pen_up_mm = estimate_progress.distance_total_mm - estimate_progress.distance_pen_down_mm
                 speed_penup_mm_min = float(self.driver.plot_profile.speed_penup)
                 speed_pendown_mm_min = float(self.driver.plot_profile.speed_pendown)
                 speed_penup_in_s = _mm_min_to_inch_s(speed_penup_mm_min)
                 speed_pendown_in_s = _mm_min_to_inch_s(speed_pendown_mm_min)
+
+                self._append_trace_separator("Estimate")
+                self._append_trace_log(f"Estimated time: {estimate_txt}  (computed in {elapsed_str})")
+                self._append_trace_log(f"Pen lifts (up/down): {estimate_progress.pen_lifts}")
+                self._append_trace_log(f"Distance pen-down: {estimate_progress.distance_pen_down_mm:.1f} mm")
+                self._append_trace_log(f"Distance pen-up:   {distance_pen_up_mm:.1f} mm")
+                if caveat is not None:
+                    self._append_trace_log(caveat)
                 self._append_trace_log(
-                    "Estimate inputs: "
-                    f"speed_penup={speed_penup_mm_min:.0f} mm/min "
-                    f"({speed_penup_in_s:.4f} in/s preview), "
-                    f"speed_pendown={speed_pendown_mm_min:.0f} mm/min "
-                    f"({speed_pendown_in_s:.4f} in/s preview), "
-                    f"accel={self.driver.plot_profile.accel:.1f}, "
-                    f"digest={self.driver.machine_settings.digest} -> "
-                    f"estimated={estimate_txt}, "
-                    f"pen_lifts={estimate_progress.pen_lifts}, "
-                    f"distance_pen_down={estimate_progress.distance_pen_down_mm:.1f} mm, "
-                    f"distance_total={estimate_progress.distance_total_mm:.1f} mm"
+                    f"Speeds: penup={speed_penup_mm_min:.0f} mm/min ({speed_penup_in_s:.4f} in/s preview), "
+                    f"pendown={speed_pendown_mm_min:.0f} mm/min ({speed_pendown_in_s:.4f} in/s preview), "
+                    f"accel={self.driver.plot_profile.accel:.1f}, digest={self.driver.machine_settings.digest}"
                 )
 
             self._refresh_view()
@@ -1432,11 +1451,11 @@ class AppWindow:
         except RuntimeError:
             return
 
-    def on_pen_up(self) -> None:
-        self._update_from_result(self.driver.raise_pen())
+    def on_pen_up(self, *, log: bool = True) -> None:
+        self._update_from_result(self.driver.raise_pen(), log=log)
 
-    def on_pen_down(self) -> None:
-        self._update_from_result(self.driver.lower_pen())
+    def on_pen_down(self, *, log: bool = True) -> None:
+        self._update_from_result(self.driver.lower_pen(), log=log)
 
     def on_pen_reset_defaults(self) -> None:
         defaults = PlotProfile()
@@ -1445,8 +1464,8 @@ class AppWindow:
         self.on_pen_height_change(0.0)
 
         if self.pen_apply_live_var.get():
-            self.on_pen_up()
-            self.on_pen_down()
+            self.on_pen_up(log=False)
+            self.on_pen_down(log=False)
 
     def on_pen_height_change(self, _value: float) -> None:
         self._apply_plot_profile(
@@ -1457,12 +1476,12 @@ class AppWindow:
     def on_pen_up_height_change(self, value: float) -> None:
         self.on_pen_height_change(value)
         if self.pen_apply_live_var.get():
-            self.on_pen_up()
+            self.on_pen_up(log=False)
 
     def on_pen_down_height_change(self, value: float) -> None:
         self.on_pen_height_change(value)
         if self.pen_apply_live_var.get():
-            self.on_pen_down()
+            self.on_pen_down(log=False)
 
     def on_speed_change(self, _value: float) -> None:
         self._apply_plot_profile(
