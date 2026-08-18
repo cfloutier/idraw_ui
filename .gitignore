@@ -8,4 +8,4 @@ build/
 dist/
 release/
 logs/
-settings\*.yaml
+settings/*.yaml
