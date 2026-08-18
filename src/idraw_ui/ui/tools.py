@@ -9,6 +9,10 @@ def format_float(value: float) -> str:
     return f"{value:.2f}"
 
 
+def format_int_thousands(value: int) -> str:
+    return f"{value:,}".replace(",", " ")
+
+
 def format_duration(seconds: float | None) -> str:
     if seconds is None:
         return "-"
@@ -28,6 +32,10 @@ def format_duration(seconds: float | None) -> str:
 
 
 def format_distance_mm(value_mm: float) -> str:
+    if value_mm >= 1_000_000.0:
+        return f"{value_mm / 1_000_000.0:.3f} km"
+    if value_mm >= 1_000.0:
+        return f"{value_mm / 1_000.0:.3f} m"
     if value_mm >= 10.0:
         return f"{format_float(value_mm / 10.0)} cm"
     return f"{format_float(value_mm)} mm"

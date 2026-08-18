@@ -39,8 +39,10 @@ from idraw_ui.ui.progress_bar import ProgressBar
 from idraw_ui.ui.svg_page_preview import BBoxMm, SvgPagePreview
 from idraw_ui.ui.tools import (
     _mm_min_to_inch_s,
+    format_distance_mm,
     format_duration,
     format_float,
+    format_int_thousands,
 )
 from idraw_ui.ui.top_bar import TopBar
 from idraw_ui.ui.trace_tab import TraceTab
@@ -1010,9 +1012,11 @@ class AppWindow:
 
                 self._append_trace_separator("Estimate")
                 self._append_trace_log(f"Estimated time: {estimate_txt}  (computed in {elapsed_str})")
-                self._append_trace_log(f"Pen lifts (up/down): {estimate_progress.pen_lifts}")
-                self._append_trace_log(f"Distance pen-down: {estimate_progress.distance_pen_down_mm:.1f} mm")
-                self._append_trace_log(f"Distance pen-up:   {distance_pen_up_mm:.1f} mm")
+                self._append_trace_log(f"Pen lifts (up/down): {format_int_thousands(estimate_progress.pen_lifts)}")
+                self._append_trace_log(
+                    f"Distance pen-down: {format_distance_mm(estimate_progress.distance_pen_down_mm)}"
+                )
+                self._append_trace_log(f"Distance pen-up:   {format_distance_mm(distance_pen_up_mm)}")
                 if caveat is not None:
                     self._append_trace_log(caveat)
                 self._append_trace_log(
